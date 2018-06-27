@@ -15,12 +15,10 @@ import           Text.Parsec                        (ParseError, endBy, sepBy,
 import           Text.Parsec.Char                   (char, digit, noneOf, oneOf,
                                                      satisfy, spaces, string)
 import           Text.Parsec.Combinator             (option)
-import           Text.Parsec.Prim                   (ParsecT)
 import           Text.ParserCombinators.Parsec      (many1, (<|>))
-import           Text.ParserCombinators.Parsec.Prim (parseFromFile)
+import           Text.ParserCombinators.Parsec.Prim (Parser, parseFromFile)
 
 type Entry = (String, Value)
-type Parser u a = ParsecT String u Identity a
 data OpacityValue = OpacityValue { opacity    :: Integer
                                  , selector   :: Selector
                                  , comparison :: Comparer
@@ -48,62 +46,62 @@ opacityRuleName = "opacity-rule"
 parseComptonFile :: String -> IO (Either ParseError [Entry])
 parseComptonFile filePath = parseFromFile comptonConfigParser filePath
 
-comptonConfigParser :: Parser u [Entry]
+comptonConfigParser :: Parser [Entry]
 comptonConfigParser = endBy entryGrouper specialCaseSemicolon
 
-whitespace :: Parser u ()
+whitespace :: Parser ()
 whitespace = skipMany $ oneOf " \t\n"
 
-specialCaseSemicolon :: Parser u Char
+specialCaseSemicolon :: Parser Char
 specialCaseSemicolon = whitespace *> char ';' <* whitespace
 
-opacityRule :: Parser u Entry
+opacityRule :: Parser Entry
 opacityRule = (,) opacityRuleName
   <$> (try $ string opacityRuleName
        *> spaces *> char '=' *> spaces *> char '['
        *> pOpacityArray <* char ']'
       )
 
-entryGrouper :: Parser u Entry
+entryGrouper :: Parser Entry
 entryGrouper = opacityRule <|> genericEntry
 
-genericEntry :: Parser u Entry
+genericEntry :: Parser Entry
 genericEntry = (,) <$> many1 (noneOf " =:") <*> (spaces *> (parseEntry <|> parseObjectEntry))
 
-parseSimpleValue :: Parser u String
+parseSimpleValue :: Parser String
 parseSimpleValue = fmap show $ (,) <$> name <*> value where
   name = whitespace *> many1 (noneOf " =;{}") <* spaces <* char '=' <* spaces
   value = many1 (noneOf ";") <* char ';' <* whitespace
 
-parseObjectNotation :: Parser u String
+parseObjectNotation :: Parser String
 parseObjectNotation = fmap show $ (,) <$> name <*> value where
   name = many1 (noneOf " :\t{}") <* spaces <* char ':' <* whitespace <* char '{'
   value = many1 parseSimpleValue <* whitespace <* char '}' <* char ';' <* whitespace
 
 -- TODO Still not fully parsing the JSON object notation
-parseObjectEntry :: Parser e Value
+parseObjectEntry :: Parser Value
 parseObjectEntry = fmap (\cont -> Textual (cont >>= id))
   $ char ':' *> whitespace *> char '{' *> whitespace
   *> many1 parseObjectNotation
   <* whitespace <* char '}'
 
-parseEntry :: Parser u Value
+parseEntry :: Parser Value
 parseEntry = char '=' *> spaces *> content where
   content = pArray <|> pTrue <|> pFalse <|> pFloater
-    <|> pInteger <|> pNatural <|> pString
+            <|> pInteger <|> pNatural <|> pString
 
-pString :: Parser u Value
+pString :: Parser Value
 pString = fmap Textual
   $ spaces *> char '"' *> many1 (noneOf "\"") <* char '"'
 
-pArray :: Parser u Value
+pArray :: Parser Value
 pArray = char '[' *> spaces *> pRegularArray <* char ']'
 
-pRegularArray :: Parser u Value
+pRegularArray :: Parser Value
 pRegularArray = fmap RegularRules
   $ (sepBy pRegularLine $ char ',') <* whitespace
 
-pOpacityArray :: Parser u Value
+pOpacityArray :: Parser Value
 pOpacityArray = fmap OpacityRules
   $ (sepBy pOpacityLine $ char ',') <* whitespace
 
@@ -111,63 +109,63 @@ opaFromRegular :: Integer -> RegularValue -> OpacityValue
 opaFromRegular opacity RegularValue{..} =
   OpacityValue opacity r_selector r_comparison r_value
 
-pOpacityLine :: Parser u OpacityValue
+pOpacityLine :: Parser OpacityValue
 pOpacityLine = (\opa val -> (opaFromRegular (read opa) val)) <$> pOpa <*> pVal
   where pOpa = whitespace *> char '"' *> try naturalNumber
         pVal = char ':' *> regularLineBase <* char '"'
 
-regularLineBase :: Parser u RegularValue
+regularLineBase :: Parser RegularValue
 regularLineBase = RegularValue <$> parseSelector <*> comp <*> value
   where comp = spaces *> stringComparer <* spaces
         value = char '\'' *> many1 (noneOf "'") <* char '\''
 
-pRegularLine :: Parser u RegularValue
+pRegularLine :: Parser RegularValue
 pRegularLine = spaces *> char '"' *> regularLineBase <* char '"' <* spaces
 
-pOpacityNumber :: Parser u String
+pOpacityNumber :: Parser String
 pOpacityNumber = char '"' *> naturalNumber <* char ':'
 
-naturalNumber :: Parser u String
+naturalNumber :: Parser String
 naturalNumber = many1 digit
-pMinusInteger :: Parser u String
+pMinusInteger :: Parser String
 pMinusInteger = (:) <$> char '-' <*> naturalNumber
-pInt :: Parser u String
+pInt :: Parser String
 pInt = pMinusInteger <|> naturalNumber
 
-pFloat :: Parser u Double
+pFloat :: Parser Double
 pFloat = fmap rd $ (++) <$> pInt <*> decimal
   where rd      = read :: String -> Double
         decimal = option "" $ (:) <$> char '.' <*> naturalNumber
 
 -- TODO Find how to simplify this shi*
-tryAndClassify :: String -> a -> Parser u a
+tryAndClassify :: String -> a -> Parser a
 tryAndClassify tryWord successReturn = do
   try $ string tryWord
   return successReturn
 
-pNatural :: Parser u Value
+pNatural :: Parser Value
 pNatural = fmap Numeric $ read <$> try naturalNumber
 
-pInteger :: Parser u Value
+pInteger :: Parser Value
 pInteger = fmap Numeric $ read <$> try pInt
 
-pFloater :: Parser u Value
+pFloater :: Parser Value
 pFloater = Floating <$> try pFloat
 
-stringComparer :: Parser u Comparer
+stringComparer :: Parser Comparer
 stringComparer = pEqualComp <|> pLikeComp <|> pEqualInsens <|> pLikeInsens
 pEqualComp = tryAndClassify "=" Equal
 pLikeComp = tryAndClassify "*=" Like
 pLikeInsens = tryAndClassify "*?=" LikeInsens
 pEqualInsens = tryAndClassify "?=" EqualInsens
 
-parseSelector :: Parser u Selector
+parseSelector :: Parser Selector
 parseSelector = pName <|> pClass <|> pWindowType
 pName = tryAndClassify "name" Name
 pClass = tryAndClassify "class_g" Class
 pWindowType = tryAndClassify "window_type" WindowType
 
-pBool :: Parser u Value
+pBool :: Parser Value
 pBool = pTrue <|> pFalse
 pTrue = tryAndClassify "true" (Enabled True)
 pFalse = tryAndClassify "false" (Enabled False)
