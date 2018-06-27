@@ -2,29 +2,27 @@
 module ComptonParser
   ( parseComptonFile
   , testParser
+  , test2
   ) where
 
 import           Control.Monad                      (void)
 import           Data.Functor.Identity              (Identity)
 import           DataTypes                          (ComptonConf (..))
-import           Text.Parsec                        (ParseError, endBy,
-                                                     optional, sepBy, skipMany,
-                                                     try)
-import           Text.Parsec.Char                   (alphaNum, char, digit,
-                                                     noneOf, oneOf, satisfy,
-                                                     spaces, string)
+-- TODO Remove - used for tests. Create tests
+import           System.IO
+import           Text.Parsec                        (ParseError, endBy, sepBy,
+                                                     skipMany, try)
+import           Text.Parsec.Char                   (char, digit, noneOf, oneOf,
+                                                     satisfy, spaces, string)
 import           Text.Parsec.Combinator             (option)
 import           Text.Parsec.Prim                   (ParsecT)
-import           Text.Parsec.Token                  (float, integer, natural)
 import           Text.ParserCombinators.Parsec      (many1, (<|>))
 import           Text.ParserCombinators.Parsec.Prim (parseFromFile)
 
 type Entry = (String, Value)
 type Parser u a = ParsecT String u Identity a
 data OpacityValue = OpacityValue { opacity    :: Integer
-                                 -- TODO Enumerate possible selectors?
                                  , selector   :: Selector
-                                 -- TODO Enumrate possible comparison fn?
                                  , comparison :: Comparer
                                  , value      :: String
                                  } deriving Show
@@ -46,168 +44,88 @@ data Value
   | RegularRules [RegularValue] deriving Show
 
 opacityRuleName = "opacity-rule"
+
 parseComptonFile :: String -> IO (Either ParseError [Entry])
 parseComptonFile filePath = parseFromFile comptonConfigParser filePath
-
-whitespace = " \t\n"
-comparisonStartSymbols = " =?*"
-eol :: Parser u ()
-eol = void $ char '\n'
-noVoidEol :: Parser u Char
-noVoidEol = char '\n'
-
-closingBracketHack :: String -> Parser u String
-closingBracketHack contents = do
-  void $ char '}'
-  return contents
-
-specialCaseSemicolon :: Parser u Char
-specialCaseSemicolon = do
-  spaces
-  charHit <- char ';'
-  skipMany (oneOf whitespace)
-  return charHit
 
 comptonConfigParser :: Parser u [Entry]
 comptonConfigParser = endBy entryGrouper specialCaseSemicolon
 
+whitespace :: Parser u ()
+whitespace = skipMany $ oneOf " \t\n"
+
+specialCaseSemicolon :: Parser u Char
+specialCaseSemicolon = whitespace *> char ';' <* whitespace
+
 opacityRule :: Parser u Entry
-opacityRule = do
-  try $ string opacityRuleName
-  spaces
-  char '='
-  spaces
-  char '['
-  array <- pOpacityArray
-  char ']'
-  return (opacityRuleName, array)
+opacityRule = (,) opacityRuleName
+  <$> (try $ string opacityRuleName
+       *> spaces *> char '=' *> spaces *> char '['
+       *> pOpacityArray <* char ']'
+      )
 
 entryGrouper :: Parser u Entry
 entryGrouper = opacityRule <|> genericEntry
 
 genericEntry :: Parser u Entry
-genericEntry = do
-  name <- many1 (noneOf " =:")
-  spaces
-  -- contents <- parseEntry <|> parseObjectEntry
-  contents <- parseEntry <|> parseObjectEntry
-  return (name, contents)
+genericEntry = (,) <$> many1 (noneOf " =:") <*> (spaces *> (parseEntry <|> parseObjectEntry))
 
 parseSimpleValue :: Parser u String
-parseSimpleValue = do
-  skipMany (oneOf whitespace)
-  name <- many1 (noneOf " =;{}")
-  spaces
-  void $ char '='
-  spaces
-  contents <- many1 (noneOf ";")
-  void $ char ';'
-  skipMany (oneOf whitespace)
-  return (show (name, contents))
+parseSimpleValue = fmap show $ (,) <$> name <*> value where
+  name = whitespace *> many1 (noneOf " =;{}") <* spaces <* char '=' <* spaces
+  value = many1 (noneOf ";") <* char ';' <* whitespace
 
 parseObjectNotation :: Parser u String
-parseObjectNotation = do
-  name <- many1 (noneOf " :\t{}")
-  spaces
-  void $ char ':'
-  skipMany (oneOf whitespace)
-  char '{'
-  contents <- many1 parseSimpleValue
-  skipMany (oneOf whitespace)
-  char '}'
-  char ';'
-  skipMany (oneOf whitespace)
-  return (show (name, contents))
+parseObjectNotation = fmap show $ (,) <$> name <*> value where
+  name = many1 (noneOf " :\t{}") <* spaces <* char ':' <* whitespace <* char '{'
+  value = many1 parseSimpleValue <* whitespace <* char '}' <* char ';' <* whitespace
 
--- TODO You cheated here
-parseObjectEntry :: Parser u Value
-parseObjectEntry = do
-  void $ char ':'
-  skipMany (oneOf whitespace)
-  char '{'
-  skipMany (oneOf whitespace)
-  contents <- many1 parseObjectNotation
-  skipMany (oneOf whitespace)
-  char '}'
-  return $ Textual (contents >>= id)
+-- TODO Still not fully parsing the JSON object notation
+parseObjectEntry :: Parser e Value
+parseObjectEntry = fmap (\cont -> Textual (cont >>= id))
+  $ char ':' *> whitespace *> char '{' *> whitespace
+  *> many1 parseObjectNotation
+  <* whitespace <* char '}'
 
 parseEntry :: Parser u Value
-parseEntry = do
-  void $ char '='
-  spaces
-  pArray <|> pTrue <|> pFalse <|> pFloater
+parseEntry = char '=' *> spaces *> content where
+  content = pArray <|> pTrue <|> pFalse <|> pFloater
     <|> pInteger <|> pNatural <|> pString
 
 pString :: Parser u Value
-pString = do
-  spaces
-  char '"'
-  value <- many1 (noneOf "\"")
-  char '"'
-  return $ Textual value
+pString = fmap Textual
+  $ spaces *> char '"' *> many1 (noneOf "\"") <* char '"'
 
 pArray :: Parser u Value
-pArray = do
-  char '['
-  spaces
-  arrayVal <- pRegularArray
-  -- skipMany (oneOf whitespace)
-  char ']'
-  return arrayVal
-
-comaAndWhite :: Parser u Char
-comaAndWhite = char ','
+pArray = char '[' *> spaces *> pRegularArray <* char ']'
 
 pRegularArray :: Parser u Value
-pRegularArray = do
-  entries <- sepBy pRegularLine comaAndWhite
-  skipMany (oneOf whitespace)
-  return (RegularRules entries)
+pRegularArray = fmap RegularRules
+  $ (sepBy pRegularLine $ char ',') <* whitespace
 
 pOpacityArray :: Parser u Value
-pOpacityArray = do
-  opacities <- sepBy pOpacityLine comaAndWhite
-  skipMany (oneOf whitespace)
-  return (OpacityRules opacities)
+pOpacityArray = fmap OpacityRules
+  $ (sepBy pOpacityLine $ char ',') <* whitespace
 
 opaFromRegular :: Integer -> RegularValue -> OpacityValue
-opaFromRegular opacity RegularValue{..} = OpacityValue opacity r_selector r_comparison r_value
+opaFromRegular opacity RegularValue{..} =
+  OpacityValue opacity r_selector r_comparison r_value
 
 pOpacityLine :: Parser u OpacityValue
-pOpacityLine = do
-  skipMany (oneOf whitespace)
-  char '"'
-  opacity <- try naturalNumber
-  char ':'
-  regVal <- regularLineBase
-  char '"'
-  return $ opaFromRegular (read opacity) regVal
+pOpacityLine = (\opa val -> (opaFromRegular (read opa) val)) <$> pOpa <*> pVal
+  where pOpa = whitespace *> char '"' *> try naturalNumber
+        pVal = char ':' *> regularLineBase <* char '"'
 
 regularLineBase :: Parser u RegularValue
-regularLineBase = do
-  selector <- pName <|> pClass <|> pWindowType
-  spaces
-  comparer <- stringComparer
-  spaces
-  char '\''
-  value <- many1 (noneOf "\'")
-  char '\''
-  return (RegularValue selector comparer value)
+regularLineBase = RegularValue <$> parseSelector <*> comp <*> value
+  where comp = spaces *> stringComparer <* spaces
+        value = char '\'' *> many1 (noneOf "'") <* char '\''
 
 pRegularLine :: Parser u RegularValue
-pRegularLine = do
-  spaces
-  char '"'
-  value <- regularLineBase
-  char '"'
-  spaces
-  return value
+pRegularLine = spaces *> char '"' *> regularLineBase <* char '"' <* spaces
 
-pOpacityNumber = do
-  char '"'
-  value <- naturalNumber
-  char ':'
-  return value
+pOpacityNumber :: Parser u String
+pOpacityNumber = char '"' *> naturalNumber <* char ':'
 
 naturalNumber :: Parser u String
 naturalNumber = many1 digit
@@ -221,44 +139,38 @@ pFloat = fmap rd $ (++) <$> pInt <*> decimal
   where rd      = read :: String -> Double
         decimal = option "" $ (:) <$> char '.' <*> naturalNumber
 
--- TODO Not really much of a transformation. Also, find how to simplify this shi*
-tryAndTransform :: String -> a -> Parser u a
-tryAndTransform tryWord successReturn = do
-  try (string tryWord)
+-- TODO Find how to simplify this shi*
+tryAndClassify :: String -> a -> Parser u a
+tryAndClassify tryWord successReturn = do
+  try $ string tryWord
   return successReturn
 
 pNatural :: Parser u Value
-pNatural = do
-  number <- try naturalNumber
-  return $ Numeric $ read number
+pNatural = fmap Numeric $ read <$> try naturalNumber
 
 pInteger :: Parser u Value
-pInteger = do
-  number <- (try pInt)
-  return $ Numeric $ read number
+pInteger = fmap Numeric $ read <$> try pInt
 
 pFloater :: Parser u Value
-pFloater = do
-  number <- try pFloat
-  return $ Floating number
+pFloater = Floating <$> try pFloat
 
 stringComparer :: Parser u Comparer
 stringComparer = pEqualComp <|> pLikeComp <|> pEqualInsens <|> pLikeInsens
-pEqualComp = tryAndTransform "=" Equal
-pLikeComp = tryAndTransform "*=" Like
-pLikeInsens = tryAndTransform "*?=" LikeInsens
-pEqualInsens = tryAndTransform "?=" EqualInsens
+pEqualComp = tryAndClassify "=" Equal
+pLikeComp = tryAndClassify "*=" Like
+pLikeInsens = tryAndClassify "*?=" LikeInsens
+pEqualInsens = tryAndClassify "?=" EqualInsens
 
-pName :: Parser u Selector
-pName = tryAndTransform "name" Name
-pClass :: Parser u Selector
-pClass = tryAndTransform "class_g" Class
-pWindowType :: Parser u Selector
-pWindowType = tryAndTransform "window_type" WindowType
-pTrue :: Parser u Value
-pTrue = tryAndTransform "true" (Enabled True)
-pFalse :: Parser u Value
-pFalse = tryAndTransform "false" (Enabled False)
+parseSelector :: Parser u Selector
+parseSelector = pName <|> pClass <|> pWindowType
+pName = tryAndClassify "name" Name
+pClass = tryAndClassify "class_g" Class
+pWindowType = tryAndClassify "window_type" WindowType
+
+pBool :: Parser u Value
+pBool = pTrue <|> pFalse
+pTrue = tryAndClassify "true" (Enabled True)
+pFalse = tryAndClassify "false" (Enabled False)
 
 -- ++++++++++++++++++++
 -- ADHOC TEST FUNCTIONS
@@ -272,5 +184,11 @@ testParser = do
   writeFile log_file_path (show result)
   print (show result)
 
-addNewLine :: String -> String
-addNewLine string = string ++ "\n"
+test2 :: IO ()
+test2 = do
+  result <- (parseComptonFile config_file_path)
+  handle <- openFile log_file_path ReadMode
+  contents <- hGetContents handle
+  let matching = (show result) == contents
+  print matching
+  print result
