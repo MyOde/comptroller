@@ -5,20 +5,22 @@ module ComptonParser
   , test2
   ) where
 
-import           Control.Monad                      (void)
-import           Data.Functor.Identity              (Identity)
-import           DataTypes                          (ComptonConf (..))
 -- TODO Remove - used for tests. Create tests
 import           System.IO
-import           Text.Parsec                        (ParseError, endBy, sepBy,
-                                                     skipMany, try)
-import           Text.Parsec.Char                   (char, digit, noneOf, oneOf,
-                                                     satisfy, spaces, string)
-import           Text.Parsec.Combinator             (option)
-import           Text.ParserCombinators.Parsec      (many1, (<|>))
-import           Text.ParserCombinators.Parsec.Prim (Parser, parseFromFile)
+import           Text.Parsec                   (ParseError, endBy, sepBy,
+                                                skipMany, try)
+import           Text.Parsec.Char              (char, digit, noneOf, oneOf,
+                                                satisfy, spaces, string)
+import           Text.Parsec.Combinator        (option)
+import           Text.ParserCombinators.Parsec (Parser, many1, parseFromFile,
+                                                (<|>))
 
 type Entry = (String, Value)
+-- TODO You broke it on purpose
+data ComptonConf = ComptonConf { opacityRules :: [Int]
+                               , mainOpacity  :: Int
+                               }
+
 data OpacityValue = OpacityValue { opacity    :: Integer
                                  , selector   :: Selector
                                  , comparison :: Comparer
@@ -28,7 +30,7 @@ data OpacityValue = OpacityValue { opacity    :: Integer
 data RegularValue = RegularValue { r_selector   :: Selector
                                  , r_comparison :: Comparer
                                  , r_value      :: String
-                                 } deriving (Show)
+                                 } deriving Show
 
 data Selector = Class | Name | WindowType deriving (Enum, Show)
 data Comparer = Equal | EqualInsens | Like | LikeInsens deriving (Enum, Show)

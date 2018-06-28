@@ -6,7 +6,6 @@ import           ComptonParser     (parseComptonFile)
 import           Control.Monad     ((>>=))
 import           Data.List         (find, lines)
 import           Data.String.Utils (startswith)
-import           DataTypes         (ComptonConf (..), Props (..))
 import           Frontend          (launch)
 import           GHC.IO.Handle     (hGetContents)
 import           System.Process    (StdStream (CreatePipe), createProcess, proc,
