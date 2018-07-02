@@ -5,6 +5,8 @@ module ComptonParser
   , test2
   ) where
 
+import           ComptonTypes
+import           Constants                     (defaultConfigPath)
 -- TODO Remove - used for tests. Create tests
 import           System.IO
 import           Text.Parsec                   (ParseError, endBy, sepBy,
@@ -14,38 +16,6 @@ import           Text.Parsec.Char              (char, digit, noneOf, oneOf,
 import           Text.Parsec.Combinator        (option)
 import           Text.ParserCombinators.Parsec (Parser, many1, parseFromFile,
                                                 (<|>))
-
-type Entry = (String, Value)
--- TODO Remember to remove all the show derivations - they're not
--- needed beyond debugging purposes
-data OpacityValue = OpacityValue { opacity    :: Integer
-                                 , selector   :: Selector
-                                 , comparison :: Comparer
-                                 , value      :: String
-                                 } deriving Show
-
-data RegularValue = RegularValue { r_selector   :: Selector
-                                 , r_comparison :: Comparer
-                                 , r_value      :: String
-                                 } deriving Show
-
-data WinType = WinType { name      :: String
-                       , arguments :: [WinTypeArg]
-                       } deriving Show
-
-data Selector = Class | Name | WindowType deriving (Enum, Show)
-data Comparer = Equal | EqualInsens | Like | LikeInsens deriving (Enum, Show)
--- TODO: Should find out how to limit what I allow from The Value data type
-data WinTypeArg = Fade Value | Shadow Value | Opacity Value | Focus Value deriving Show
-
-data Value
-  = Enabled Bool
-  | Textual String
-  | Numeric Integer
-  | Floating Double
-  | WinTypes [WinType]
-  | OpacityRules [OpacityValue]
-  | RegularRules [RegularValue] deriving Show
 
 opacityRuleName = "opacity-rule"
 
@@ -75,7 +45,7 @@ parseWindowTypeOption :: String -> Parser Value -> Parser Value
 parseWindowTypeOption name valueParser =
   ((try $ string name) *> whitespace *> char '='
    *> whitespace *> valueParser <* char ';'
-      )
+  )
 
 win_Fade = Fade <$> parseWindowTypeOption "fade" pEnabled
 win_Shadow = Shadow <$> parseWindowTypeOption "shadow" pEnabled
@@ -151,13 +121,6 @@ pFloat = fmap rd $ (++) <$> pInt <*> decimal
   where rd      = read :: String -> Double
         decimal = option "" $ (:) <$> char '.' <*> naturalNumber
 
--- TODO Find how to simplify this shi*. Pretty sure I'll just rewrite the
--- dependent stuff to not need something weird like this
-tryAndClassify :: String -> a -> Parser a
-tryAndClassify tryWord successReturn = do
-  try $ string tryWord
-  return successReturn
-
 tryString :: String -> Parser String
 tryString word = try $ string word
 
@@ -185,8 +148,8 @@ parseSelector = pName <|> pClass <|> pWindowType
 
 parseBoolean :: Parser Bool
 parseBoolean = pTrue <|> pFalse
-  where pTrue = True <$ tryString "true"
-        pFalse = False <$ tryString "false"
+  where pTrue = True <$ (tryString "true" <|> tryString "True")
+        pFalse = False <$ (tryString "false" <|> tryString "False")
 
 -- ++++++++++++++++++++
 -- ADHOC TEST FUNCTIONS

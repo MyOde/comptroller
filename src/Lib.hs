@@ -3,6 +3,8 @@ module Lib
     ) where
 
 import           ComptonParser     (parseComptonFile)
+import           ComptonWriter     (writeComptonConfig)
+import           Constants         (defaultConfigPath)
 import           Control.Monad     ((>>=))
 import           Data.List         (find, lines)
 import           Data.String.Utils (startswith)
@@ -18,7 +20,6 @@ name_identifier = "WM_NAME"
 xprop = "xprop"
 xdotool = "xdotool"
 xdotool_Arguments = [ "getwindowfocus" ]
-compton_config_path = "/home/bmiww/.config/compton.conf"
 log_file_path = "/home/bmiww/comproller_log"
 
 xpropIdArguments :: String -> [String]
@@ -43,12 +44,18 @@ getPropsLines propsString =
 addNewLine :: String -> String
 addNewLine string = string ++ "\n"
 
+randomFile = "/home/bmiww/randomfile"
+
 someFunc :: IO ()
 someFunc = do
   propsString <- (runGetOut xdotool xdotool_Arguments
                   >>= \id -> runGetOut xprop (xpropIdArguments id))
 
-  couldBeComptonConfig <- parseComptonFile compton_config_path
+  comptonParseResult <- parseComptonFile defaultConfigPath
+  case  comptonParseResult of
+    Left errorValue -> error "Failed"
+    Right result    -> writeComptonConfig randomFile result
+
   ---- to be continued
   writeFile log_file_path
     ((map parseXpropOutput
