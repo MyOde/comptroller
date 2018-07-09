@@ -1,5 +1,6 @@
 module ComptonTypes where
 
+import           Data.List (find)
 
 -- TODO Remember to remove all the show derivations - they're not
 -- needed beyond debugging purposes
@@ -32,7 +33,16 @@ data Value
   | Floating Double
   | WinTypes [WinType]
   | OpacityRules [OpacityValue]
-  | RegularRules [RegularValue] deriving Show
+  | RegularRules [RegularValue] deriving (Show)
+
+getOpacityArray :: [Entry] -> Value
+getOpacityArray entries = case maybeFound of
+  Nothing          -> OpacityRules []
+  Just (_, result) -> result
+  where maybeFound = find (\(name, valueType) -> case valueType of
+                              (OpacityRules _) -> True
+                              _                -> False
+                          ) entries
 
 selectorString :: Selector -> String
 selectorString Class      = "class_g"

@@ -2,7 +2,9 @@
 module ComptonWriter where
 
 import           ComptonTypes
-import           System.IO    (writeFile)
+import           Data.Text    (pack)
+import           Data.Text.IO (writeFile)
+import           Prelude      hiding (writeFile)
 
 spaceEqual = " = "
 spaceColon = " :\n{\n"
@@ -23,7 +25,7 @@ doubleTab original = "\t\t" ++ original
 
 writeComptonConfig :: String -> [Entry] -> IO ()
 writeComptonConfig configPath entries = writeFile configPath
-  $ createComptonLines entries >>= addNewLine
+  $ pack $ createComptonLines entries >>= addNewLine
 
 createComptonLines :: [Entry] -> [String]
 createComptonLines entries = map comptonLine entries

@@ -25,6 +25,8 @@ dependencies:
 - MissingH
 - parsec
 - dmenu
+- text
+- optparse-applicative
 
 library:
   source-dirs: src

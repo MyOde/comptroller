@@ -4,15 +4,20 @@ module XpropParser
 
 import           Control.Monad                 (void)
 import           Text.Parsec.Char              (char, noneOf, spaces)
-import           Text.ParserCombinators.Parsec (Parser, many1, parse, skipMany)
+import           Text.ParserCombinators.Parsec (Parser, many1, parse, skipMany,
+                                                (<|>))
 
 parseXpropOutput :: String -> String
 parseXpropOutput text = case parse lineParse "(unknown)" text of
-  Left errorMessage -> error "oh nopes"
+  Left errorMessage -> error $ "OH NOPES XPROP\n" ++ show errorMessage
   Right result      -> result
 
-lineParse :: Parser [Char]
+lineParse :: Parser String
 lineParse =
-  (skipMany $ noneOf "=")
-  *> char '=' *> spaces *> char '"'
-  *> many1 (noneOf "\"")
+  (skipMany $ noneOf " =")
+  *> (spaces *> char '=' *> spaces *> (parseString <|> parseOther))
+
+parseString :: Parser String
+parseString = char '"' *> many1 (noneOf "\"") <* char '"'
+parseOther :: Parser String
+parseOther = many1 $ noneOf "|"

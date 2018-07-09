@@ -1,8 +1,8 @@
 {-# LANGUAGE RecordWildCards #-}
 module ComptonParser
   ( parseComptonFile
-  , testParser
-  , test2
+  -- , testParser
+  -- , test2
   ) where
 
 import           ComptonTypes
@@ -14,13 +14,18 @@ import           Text.Parsec                   (ParseError, endBy, sepBy,
 import           Text.Parsec.Char              (char, digit, noneOf, oneOf,
                                                 satisfy, spaces, string)
 import           Text.Parsec.Combinator        (option)
-import           Text.ParserCombinators.Parsec (Parser, many1, parseFromFile,
-                                                (<|>))
+import           Text.ParserCombinators.Parsec (Parser, many1, parse,
+                                                parseFromFile, (<|>))
 
 opacityRuleName = "opacity-rule"
 
-parseComptonFile :: String -> IO (Either ParseError [Entry])
-parseComptonFile filePath = parseFromFile comptonConfigParser filePath
+-- parseComptonFile :: String -> IO (Either ParseError [Entry])
+-- parseComptonFile filePath = parseFromFile comptonConfigParser filePath
+-- parseComptonFile :: String -> IO (Either ParseError [Entry])
+parseComptonFile :: String -> [Entry]
+parseComptonFile fileContents = case parse comptonConfigParser "(unknown)" fileContents of
+  Left errorMessage -> error $ "OH NO - CANT DO COMPTON PARSE"
+  Right result      -> result
 
 comptonConfigParser :: Parser [Entry]
 comptonConfigParser = endBy entryGrouper (char ';' <* whitespace)
@@ -154,20 +159,20 @@ parseBoolean = pTrue <|> pFalse
 -- ++++++++++++++++++++
 -- ADHOC TEST FUNCTIONS
 -- ++++++++++++++++++++
-log_file_path = "/home/bmiww/comproller_log_parsed2"
-config_file_path = "/home/bmiww/.config/compton.conf_"
+-- log_file_path = "/home/bmiww/comproller_log_parsed2"
+-- config_file_path = "/home/bmiww/.config/compton.conf_"
 
-testParser :: IO ()
-testParser = do
-  result <- (parseComptonFile config_file_path)
-  writeFile log_file_path (show result)
-  print (show result)
+-- testParser :: IO ()
+-- testParser = do
+--   result <- (parseComptonFile config_file_path)
+--   writeFile log_file_path (show result)
+--   print (show result)
 
-test2 :: IO ()
-test2 = do
-  result <- (parseComptonFile config_file_path)
-  handle <- openFile log_file_path ReadMode
-  contents <- hGetContents handle
-  let matching = (show result) == contents
-  print matching
-  print result
+-- test2 :: IO ()
+-- test2 = do
+--   result <- (parseComptonFile config_file_path)
+--   handle <- openFile log_file_path ReadMode
+--   contents <- hGetContents handle
+--   let matching = (show result) == contents
+--   print matching
+--   print result
