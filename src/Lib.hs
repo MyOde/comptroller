@@ -94,23 +94,28 @@ changeOpacity opacity programName (OpacityRules rules)= OpacityRules $ newRule:r
 copyConfigFile :: String -> String -> IO ()
 copyConfigFile from to = callProcess "cp" [from, to]
 
--- TODO Try out and maybe switch to the optparse-applicative package
+resetCompton :: String -> IO ()
+resetCompton pid = callProcess "kill" ["-s", "SIGUSR1", pid]
+
+oldComptonReset :: [Entry] -> IO ()
+oldComptonReset newComptonFile =
+  getComptonPID
+  >>= killCompton
+  >> (writeComptonConfig tempConfigPath newComptonFile)
+  >> launchCompton tempConfigPath
+  >> copyConfigFile tempConfigPath defaultConfigPath
+  where tempConfigPath = defaultConfigPath ++ "_comptroller"
+
 parseArgs :: [String] -> IO ()
--- parseArgs ["-cn", "-o", opacity] = do
 parseArgs ["-c"] = do
   windowName <- getWindowName <$> parseProps
-  -- comptonResult <- (extract <$> parseComptonFile defaultConfigPath)
   configString <- readFile defaultConfigPath
   let comptonResult = parseComptonFile (unpack configString)
   let newOpacityRules = changeOpacity (readInt opacity) windowName (getOpacityArray comptonResult)
   let newComptonFile = replaceOrAdd ("opacity-rule", newOpacityRules) comptonResult
-  -- writeComptonConfig "/home/bmiww/randomfile" newComptonFile
-  getComptonPID
-    >>= killCompton
-    -- >> (writeComptonConfig defaultConfigPath newComptonFile)
-    >> (writeComptonConfig tempConfigPath newComptonFile)
-    >> launchCompton tempConfigPath
-    >> copyConfigFile tempConfigPath defaultConfigPath
+  (writeComptonConfig tempConfigPath newComptonFile)
+  copyConfigFile tempConfigPath defaultConfigPath
+  getComptonPID >>= resetCompton
     where readInt = read :: String -> Integer
           getWindowName = parseXpropOutput . getNameLine . lines
           -- TODO Dont leave undefined here
@@ -119,18 +124,6 @@ parseArgs ["-c"] = do
           opacity = "99"
           tempConfigPath = defaultConfigPath ++ "_comptroller"
 
-
-
 someFunc :: IO ()
 someFunc = do
   getArgs >>= parseArgs
-  -- propsString <- parseProps
-  -- comptonParseResult <- parseComptonFile defaultConfigPath
-  -- case  comptonParseResult of
-  --   Left errorValue -> putStrLn "Failed"
-  --   Right result    -> writeComptonConfig randomFile result
-
-  ---- to be continued
-  -- writeFile log_file_path
-  --   ((map parseXpropOutput
-  --     (getPropsLines (lines propsString))) >>= addNewLine)
