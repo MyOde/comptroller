@@ -9,7 +9,7 @@ import           ComptonTypes
 import           Constants                     (defaultConfigPath)
 -- TODO Remove - used for tests. Create tests
 import           System.IO
-import           Text.Parsec                   (ParseError, endBy, sepBy,
+import           Text.Parsec                   (ParseError, endBy, sepEndBy,
                                                 skipMany, try)
 import           Text.Parsec.Char              (char, digit, noneOf, oneOf,
                                                 satisfy, spaces, string)
@@ -19,12 +19,9 @@ import           Text.ParserCombinators.Parsec (Parser, many1, parse,
 
 opacityRuleName = "opacity-rule"
 
--- parseComptonFile :: String -> IO (Either ParseError [Entry])
--- parseComptonFile filePath = parseFromFile comptonConfigParser filePath
--- parseComptonFile :: String -> IO (Either ParseError [Entry])
 parseComptonFile :: String -> [Entry]
 parseComptonFile fileContents = case parse comptonConfigParser "(unknown)" fileContents of
-  Left errorMessage -> error $ "OH NO - CANT DO COMPTON PARSE"
+  Left errorMessage -> error $ "Failed parsing compton configuration file:\n" ++ show errorMessage
   Right result      -> result
 
 comptonConfigParser :: Parser [Entry]
@@ -84,15 +81,18 @@ pTextual = fmap Textual
   $ spaces *> char '"' *> many1 (noneOf "\"") <* char '"'
 
 pArray :: Parser Value
-pArray = char '[' *> spaces *> pRegularArray <* char ']'
+pArray = char '[' *> whitespace *> pRegularArray <* char ']'
+
+comaEliminateTrailingSpace :: Parser Char
+comaEliminateTrailingSpace = char ',' <* whitespace
 
 pRegularArray :: Parser Value
 pRegularArray = fmap RegularRules
-  $ (sepBy pRegularLine $ char ',') <* whitespace
+  $ (sepEndBy pRegularLine $ comaEliminateTrailingSpace) <* whitespace
 
 pOpacityArray :: Parser Value
 pOpacityArray = fmap OpacityRules
-  $ (sepBy pOpacityLine $ char ',') <* whitespace
+  $ (sepEndBy pOpacityLine $ comaEliminateTrailingSpace) <* whitespace
 
 opaFromRegular :: Integer -> RegularValue -> OpacityValue
 opaFromRegular opacity RegularValue{..} =
@@ -109,7 +109,7 @@ regularLineBase = RegularValue <$> parseSelector <*> comp <*> value
         value = char '\'' *> many1 (noneOf "'") <* char '\''
 
 pRegularLine :: Parser RegularValue
-pRegularLine = spaces *> char '"' *> regularLineBase <* char '"' <* spaces
+pRegularLine = char '"' *> regularLineBase <* char '"' <* whitespace
 
 pOpacityNumber :: Parser String
 pOpacityNumber = char '"' *> naturalNumber <* char ':'

@@ -4,6 +4,7 @@ module ComptonWriter where
 import           ComptonTypes
 import           Data.Text    (pack)
 import           Data.Text.IO (writeFile)
+import           Numeric      (showFFloat)
 import           Prelude      hiding (writeFile)
 
 spaceEqual = " = "
@@ -53,7 +54,8 @@ comptonValue :: Value -> String
 comptonValue (Enabled val)        = show val
 comptonValue (Textual val)        = "\"" ++ val ++ "\""
 comptonValue (Numeric val)        = show val
-comptonValue (Floating val)       = show val
+                                    -- TODO The empty string argument is really ugly
+comptonValue (Floating val)       = showFFloat Nothing val $ ""
 comptonValue (WinTypes types)     = map winTypeLine types >>= addNewLine
 comptonValue (OpacityRules rules) = map opacityLine rules
                                     >>= (addNewLine . addComa)
@@ -62,9 +64,8 @@ comptonValue (RegularRules rules) = map regularArrayLine rules
 
 winTypeLine :: WinType -> String
 winTypeLine WinType{..} =
-  "\t" ++ name ++ spaceColonTabbed ++ argumentLines ++ "\t}\n"
+  "\t" ++ name ++ spaceColonTabbed ++ argumentLines ++ "\t};\n"
   where argumentLines = (map makeWinArgument arguments)
-                        -- TODO this composition order feels a bit weird
                         >>= (doubleTab . addNewLine . addSemiColon)
 
 makeWinArgument :: WinTypeArg -> String
