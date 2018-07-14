@@ -2,26 +2,23 @@ module Lib
     ( someFunc
     ) where
 
+import           CommandLineParser (ConsArg (..), CurrentWindow (..),
+                                    IdentifyBy (..), parseCommandLine)
 import           ComptonParser          (parseComptonFile)
-import           ComptonTypes           (Comparer (..), Entry,
-                                         OpacityValue (..), Selector (..),
-                                         Value (..), getOpacityArray)
-import           Prelude                hiding (readFile)
--- import           CommandLineParser      (parseCommandLine)
+import           ComptonTypes      (Comparer (..), Entry, OpacityValue (..),
+                                    Selector (..), Value (..), getOpacityArray)
+import           ComptonUtilities  (changeOpacity)
 import           ComptonWriter          (writeComptonConfig)
-import           Constants              (defaultConfigPath)
 import           Control.Monad          (void)
-import           Control.Monad.IO.Class (liftIO)
 import           Data.List              (find, lines)
 import           Data.String.Utils      (startswith)
 import           Data.Text              (pack, strip, unpack)
 import           Data.Text.IO           (readFile)
 import           Frontend               (launch)
 import           GHC.IO.Handle          (hGetContents)
-import           System.Environment     (getArgs)
+import           Prelude           hiding (readFile)
 import           System.Process         (StdStream (CreatePipe), callProcess,
-                                         createProcess, proc, spawnProcess,
-                                         std_out)
+                                    createProcess, proc, spawnProcess, std_out)
 import           XpropParser            (parseXpropOutput)
 
 class_identier = "WM_CLASS"
@@ -41,7 +38,6 @@ runGetOut name arguments = do
     (proc name arguments){ std_out = CreatePipe }
   hGetContents outHandle
 
--- TODO You messed with this - it might not work properly (probably its ok)
 parseProps :: IO String
 parseProps = (runGetOut xdotool xdotool_Arguments
               >>= runGetOut xprop . xpropIdArguments)
@@ -49,81 +45,79 @@ parseProps = (runGetOut xdotool xdotool_Arguments
 runAndForget :: String -> [String] -> IO ()
 runAndForget name arguments = void $ spawnProcess name arguments
 
-findLinesBeginningWith :: [String] -> [String] -> [String]
-findLinesBeginningWith lineList substrings =
-  filter (\line ->
-            any (\substring ->
-                   startswith substring line) substrings) lineList
-
-getPropsLines :: [String] -> [String]
-getPropsLines propsString =
-  findLinesBeginningWith propsString [name_identifier, class_identier]
-
 getNameLine :: [String] -> String
 getNameLine propsStrings = case find (startswith name_identifier) propsStrings of
   Just result -> result
+  Nothing     -> error "Window missing the name property"
 
-addNewLine :: String -> String
-addNewLine string = string ++ "\n"
+getClassLine :: [String] -> String
+getClassLine propsString = case find (startswith class_identier) propsString of
+  Just result -> result
+  Nothing     -> error "Window missing the class property"
 
 getComptonPID :: IO String
-getComptonPID
-  = unpack . strip . pack
+getComptonPID = unpack . strip . pack
   <$> runGetOut "pidof" ["compton"]
 
-killCompton :: String -> IO ()
-killCompton ""  = return ()
-killCompton pid = callProcess "kill" [pid]
+kill :: String -> IO ()
+kill pid = callProcess "kill" [pid]
 
+-- TODO Check if You need to manually do something with the handle
+-- Maybe just voiding it could cause some weirdness
 launchCompton  :: String -> IO ()
 launchCompton configPath = runAndForget "compton" ["-b", "--config", configPath]
-
-randomFile = "/home/bmiww/randomfile"
-
 
 replaceOrAdd :: Entry -> [Entry] -> [Entry]
 replaceOrAdd (name, value) ((curName, curValue):rest) = if curName == name then (name, value):rest
                                                         else (curName, curValue) : replaceOrAdd (name, value) rest
 replaceOrAdd (name, value) [] = [(name, value)]
 
--- TODO Move a part of this to the compton utilities or something
-changeOpacity :: Integer -> String -> Value -> Value
-changeOpacity opacity programName (OpacityRules rules)= OpacityRules $ newRule:rules
-  where newRule = OpacityValue opacity Name Equal programName
-
 copyConfigFile :: String -> String -> IO ()
 copyConfigFile from to = callProcess "cp" [from, to]
 
-resetCompton :: String -> IO ()
-resetCompton pid = callProcess "kill" ["-s", "SIGUSR1", pid]
+sendSIGUSR1 :: String -> IO ()
+sendSIGUSR1 pid = callProcess "kill" ["-s", "SIGUSR1", pid]
 
-oldComptonReset :: [Entry] -> IO ()
-oldComptonReset newComptonFile =
-  getComptonPID
-  >>= killCompton
+resetCompton :: IO ()
+resetCompton = getComptonPID >>= sendSIGUSR1
+
+oldComptonReset :: String -> [Entry] -> IO ()
+oldComptonReset configPath newComptonFile =
+  getComptonPID >>= kill
   >> (writeComptonConfig tempConfigPath newComptonFile)
   >> launchCompton tempConfigPath
-  >> copyConfigFile tempConfigPath defaultConfigPath
-  where tempConfigPath = defaultConfigPath ++ "_comptroller"
+  >> copyConfigFile tempConfigPath configPath
+  where tempConfigPath = configPath ++ "_comptroller"
 
-parseArgs :: [String] -> IO ()
-parseArgs ["-c"] = do
-  windowName <- getWindowName <$> parseProps
-  configString <- readFile defaultConfigPath
-  let comptonResult = parseComptonFile (unpack configString)
-  let newOpacityRules = changeOpacity (readInt opacity) windowName (getOpacityArray comptonResult)
-  let newComptonFile = replaceOrAdd ("opacity-rule", newOpacityRules) comptonResult
-  (writeComptonConfig tempConfigPath newComptonFile)
-  copyConfigFile tempConfigPath defaultConfigPath
-  getComptonPID >>= resetCompton
-    where readInt = read :: String -> Integer
-          getWindowName = parseXpropOutput . getNameLine . lines
-          -- TODO Dont leave undefined here
-          extract (Left err)  = undefined
-          extract (Right res) = res
-          opacity = "99"
-          tempConfigPath = defaultConfigPath ++ "_comptroller"
+parseWindowIdentifier :: ([String] -> String) -> IO String
+parseWindowIdentifier getter = parseXpropOutput . getter . lines <$> parseProps
 
 someFunc :: IO ()
-someFunc = do
-  getArgs >>= parseArgs
+someFunc = parseCommandLine >>= actOnArguments
+
+windowIdentifierGetter :: IdentifyBy -> ([String] -> String)
+windowIdentifierGetter ClassName  = getClassLine
+windowIdentifierGetter WindowName = getNameLine
+
+windowIdentifierSelector :: IdentifyBy -> Selector
+windowIdentifierSelector ClassName  = Class
+windowIdentifierSelector WindowName = Name
+
+actOnArguments :: ConsArg -> IO ()
+actOnArguments (ConsArg NoActiveWindowSelect _ _ _) = error "NOT IMPLEMENTED"
+actOnArguments (ConsArg SelectActiveWindow windowIdentifier opacity configPath) =
+  newComptonFile >>= writeComptonConfig tempConfigPath
+  >> copyConfigFile tempConfigPath configPath
+  >> resetCompton
+  where windowName = parseWindowIdentifier $ windowIdentifierGetter windowIdentifier
+        comptonResult = parseComptonFile . unpack
+          <$> readFile configPath
+        comptonOpacityRules = getOpacityArray <$> comptonResult
+        newOpacityRules = changeOpacity opacity comptonSelector
+          <$> windowName
+          <*> comptonOpacityRules
+        newComptonFile = replaceOrAdd
+          <$> ((,) <$> pure "opacity-rule" <*> newOpacityRules)
+          <*> comptonResult
+        tempConfigPath = configPath ++ "_comptroller"
+        comptonSelector = windowIdentifierSelector windowIdentifier

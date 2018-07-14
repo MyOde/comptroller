@@ -6,7 +6,6 @@ module ComptonParser
   ) where
 
 import           ComptonTypes
-import           Constants                     (defaultConfigPath)
 -- TODO Remove - used for tests. Create tests
 import           System.IO
 import           Text.Parsec                   (ParseError, endBy, sepEndBy,
