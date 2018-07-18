@@ -20,7 +20,6 @@ defaultConfigPath = "/home/bmiww/.config/compton.conf"
 data CurrentWindow = NoActiveWindowSelect | SelectActiveWindow
 data ShouldUseDmenu = NoDmenu | UseDmenu
 data IdentifyBy = ClassName | WindowName
--- data ConfigPath = Default | UserSpecified String
 
 data ConsArg = ConsArg
   { operateOnActiveWin :: CurrentWindow
@@ -30,11 +29,13 @@ data ConsArg = ConsArg
   }
 
 parseCommandLine :: IO ConsArg
-parseCommandLine = execParser $ info (comptrollerOptions <**> helper)
-                               ( fullDesc
-                               <> progDesc "This here be the comptroller"
-                               <> header "OFF WITH 'IS HEAD"
-                               )
+parseCommandLine = execParser
+  $ info
+  (comptrollerOptions <**> helper)
+  ( fullDesc
+    <> progDesc "This here be the comptroller"
+    <> header "OFF WITH 'IS HEAD"
+  )
 
 comptrollerOptions :: Parser ConsArg
 comptrollerOptions = ConsArg
