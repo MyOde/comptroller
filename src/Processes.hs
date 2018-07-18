@@ -5,11 +5,10 @@ module Processes
   , kill
   , sendSIGUSR1
   , launchCompton
-  , copyFile
   ) where
 
-import           System.Process    (callProcess, readProcess)
-import           Data.Text         (pack, strip, unpack)
+import           Data.Text      (pack, strip, unpack)
+import           System.Process (callProcess, readProcess)
 
 xprop = "xprop"
 xdotool = "xdotool"
@@ -38,9 +37,6 @@ getComptonPID = getPIDByName "compton"
 
 kill :: String -> IO ()
 kill pid = callProcess killCommand [pid]
-
-copyFile :: String -> String -> IO ()
-copyFile from to = callProcess "cp" [from, to]
 
 sendSIGUSR1 :: String -> IO ()
 sendSIGUSR1 pid = callProcess killCommand ["-s", "SIGUSR1", pid]

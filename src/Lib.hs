@@ -9,14 +9,14 @@ import           ComptonTypes      (Comparer (..), Entry, OpacityValue (..),
                                     Selector (..), Value (..), getOpacityArray)
 import           ComptonUtilities  (changeOpacity, windowIdentifierSelector)
 import           ComptonWriter     (writeComptonConfig)
-import           Control.Monad     (void)
+import           Control.Monad     (liftM, void)
+import           Data.List         (find)
 import           Data.Text         (unpack)
 import           Data.Text.IO      (readFile)
 import           Frontend          (launch)
 import           Prelude           hiding (readFile)
-import           Processes         (callXDOTool, callXProps, copyFile,
-                                    getComptonPID, kill, launchCompton,
-                                    sendSIGUSR1)
+import           Processes         (callXDOTool, callXProps, getComptonPID,
+                                    kill, launchCompton, sendSIGUSR1)
 import           XpropParser       (getClassLine, getNameLine, parseXpropOutput)
 
 replaceOrAdd :: Entry -> [Entry] -> [Entry]
@@ -44,28 +44,32 @@ windowIdentifierGetter :: IdentifyBy -> ([String] -> String)
 windowIdentifierGetter ClassName  = getClassLine
 windowIdentifierGetter WindowName = getNameLine
 
+paintOnOverlay = "paint-on-overlay"
+getResetOption :: String -> [Entry] -> IO ()
+getResetOption configPath entries = case find (\(name, _) -> name == paintOnOverlay) entries of
+  Nothing                  -> resetCompton
+  Just (_, Enabled result) -> if result == True then oldReset else resetCompton
+  Just (_, _)              -> error "Configuration weirdness - paint on overlay is not of boolean type"
+  where oldReset = killAndLaunchCompton configPath
+
+changeOpaciteeeh :: Selector -> Integer -> String -> [Entry] -> [Entry]
+changeOpaciteeeh selector opacity windowName allValues = replaceOrAdd ("opacity-rule", newOpacityArray) allValues
+  where opacityArray = getOpacityArray allValues
+        newOpacityArray = changeOpacity opacity selector windowName opacityArray
+
 actOnArguments :: ConsArg -> IO ()
 actOnArguments (ConsArg NoActiveWindowSelect _ _ _) = error "NOT IMPLEMENTED"
 actOnArguments (ConsArg SelectActiveWindow windowIdentifier opacity configPath) =
-  newComptonFile >>= writeComptonConfig tempConfigPath
-  >> copyFile tempConfigPath configPath
-  >> resetCompton
-  -- >> oldReset
-  -- TODO Only real IO here comes from window name and compton result lines
-  -- The rest should be extracted as regular functions. Maybe.
+  newComptonFile
+  >>= writeComptonConfig configPath
+  >> newComptonFile
+  >>= getResetOption configPath
   where windowName = parseWindowIdentifier $ windowIdentifierGetter windowIdentifier
         comptonResult = parseComptonFile . unpack
           <$> readFile configPath
-        comptonOpacityRules = getOpacityArray <$> comptonResult
-        newOpacityRules = changeOpacity opacity comptonSelector
-          <$> windowName
-          <*> comptonOpacityRules
-        newComptonFile = replaceOrAdd
-          <$> ((,) <$> pure "opacity-rule" <*> newOpacityRules)
-          <*> comptonResult
-        tempConfigPath = configPath ++ "_comptroller"
+        newComptonFile = changeOpaciteeeh comptonSelector opacity
+          <$> windowName <*> comptonResult
         comptonSelector = windowIdentifierSelector windowIdentifier
-        oldReset = killAndLaunchCompton tempConfigPath
 
 defaultMain :: IO ()
 defaultMain = parseCommandLine >>= actOnArguments
