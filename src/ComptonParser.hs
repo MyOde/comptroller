@@ -1,46 +1,60 @@
 {-# LANGUAGE RecordWildCards #-}
 module ComptonParser
   ( parseComptonFile
-  -- , testParser
-  -- , test2
   ) where
 
+import           ComptonStatic
 import           ComptonTypes
--- TODO Remove - used for tests. Create tests
-import           System.IO
+import           Data.List                     (foldr1)
 import           Text.Parsec                   (ParseError, endBy, sepEndBy,
                                                 skipMany, try)
 import           Text.Parsec.Char              (char, digit, noneOf, oneOf,
-                                                satisfy, spaces, string)
+                                                string)
 import           Text.Parsec.Combinator        (option)
-import           Text.ParserCombinators.Parsec (Parser, many1, parse,
-                                                parseFromFile, (<|>))
+import           Text.ParserCombinators.Parsec (Parser, many1, parse, (<|>))
 
-opacityRuleName = "opacity-rule"
+staticNameParser:: [String] -> Parser Value -> Parser Entry
+staticNameParser entryNames valueParser =
+  foldr1 (<|>) (map (parseEntry valueParser) entryNames)
+
+parseBooleanEntry :: Parser Entry
+parseBooleanEntry = staticNameParser booleanEntries pEnabled
+parseFloatingEntry :: Parser Entry
+parseFloatingEntry = staticNameParser floatingEntries pFloater
+parseArrayEntry :: Parser Entry
+parseArrayEntry = staticNameParser arrayEntries pArray
+parseTextEntry :: Parser Entry
+parseTextEntry = staticNameParser textualEntries pTextual
+
+parseOpacityRuleEntry :: Parser Entry
+parseOpacityRuleEntry = (,) <$> name <*> opacities
+  where name = try $ string c_opacityRule <* whitespace <* char '='
+        opacities = whitespace *> char '[' *> pOpacityArray <* char ']'
+
+parseWinTypesEntry :: Parser Entry
+parseWinTypesEntry = (,) <$> pWinTypesName <*> parseWinTypes
+  where pWinTypesName = try $ string c_wintypes <* whitespace
+
+parseAnyEntry :: Parser Entry
+parseAnyEntry = parseBooleanEntry
+                <|> parseFloatingEntry
+                <|> parseArrayEntry
+                <|> parseTextEntry
+                <|> parseOpacityRuleEntry
+                <|> parseWinTypesEntry
 
 parseComptonFile :: String -> [Entry]
 parseComptonFile fileContents = case parse comptonConfigParser "(unknown)" fileContents of
-  Left errorMessage -> error $ "Failed parsing compton configuration file:\n" ++ show errorMessage
+  Left errorMessage -> error
+                      $ "Failed parsing compton configuration file:\n"
+                      ++ show errorMessage
   Right result      -> result
 
 comptonConfigParser :: Parser [Entry]
-comptonConfigParser = endBy entryGrouper (char ';' <* whitespace)
+comptonConfigParser = endBy parseAnyEntry (char ';' <* whitespace)
 
 whitespace :: Parser ()
 whitespace = skipMany $ oneOf " \t\n"
-
-entryGrouper :: Parser Entry
-entryGrouper = opacityRule <|> genericEntry
-
-opacityRule :: Parser Entry
-opacityRule = (,) <$> name <*> opacities
-  where name = try $ string opacityRuleName <* whitespace <* char '='
-        opacities = whitespace *>  char '[' *> pOpacityArray <* char ']'
-
-genericEntry :: Parser Entry
-genericEntry = (,)
-  <$> many1 (noneOf " =:")
-  <*> (spaces *> (parseEntry <|> parseWinTypesReal))
 
 parseWindowTypeOption :: String -> Parser Value -> Parser Value
 parseWindowTypeOption name valueParser =
@@ -57,27 +71,26 @@ parseWinType :: Parser [WinTypeArg]
 parseWinType = whitespace *> many1 (argumentParser <* whitespace)
   where argumentParser = win_Shadow <|> win_Opacity <|> win_Fade <|> win_Focus
 
-parseWinTypes :: Parser WinType
-parseWinTypes = WinType <$> name <*> winTypes
+parseWinTypes' :: Parser WinType
+parseWinTypes' = WinType <$> name <*> winTypes
   where name = many1 (noneOf " :\t{}")
         winTypes = (whitespace *> char ':' *> whitespace *> char '{' *> parseWinType <* whitespace <* char '}' <* char ';' <* whitespace)
 
-parseWinTypesReal :: Parser Value
-parseWinTypesReal = WinTypes <$>
+parseWinTypes :: Parser Value
+parseWinTypes = WinTypes <$>
   (char ':' *> whitespace *> char '{' *> whitespace
-  *> (many1 parseWinTypes)
+  *> (many1 parseWinTypes')
   <* whitespace <* char '}'
   )
 
-parseEntry :: Parser Value
-parseEntry = char '=' *> spaces *> content
-  where content = pArray <|> pEnabled <|> pFloater
-            <|> pInteger <|> pNatural <|> pTextual
+parseEntry :: Parser Value -> String -> Parser Entry
+parseEntry parseValue name = (,) <$> parseEntryName <*> parseValue
+  where parseEntryName = try $ string name <* whitespace <* char '=' <* whitespace
 
 -- TODO I really like the trip that I had while naming these things
 pTextual :: Parser Value
 pTextual = fmap Textual
-  $ spaces *> char '"' *> many1 (noneOf "\"") <* char '"'
+  $ whitespace *> char '"' *> many1 (noneOf "\"") <* char '"'
 
 pArray :: Parser Value
 pArray = char '[' *> whitespace *> pRegularArray <* char ']'
@@ -109,9 +122,6 @@ regularLineBase = RegularValue <$> parseSelector <*> comp <*> value
 
 pRegularLine :: Parser RegularValue
 pRegularLine = char '"' *> regularLineBase <* char '"' <* whitespace
-
-pOpacityNumber :: Parser String
-pOpacityNumber = char '"' *> naturalNumber <* char ':'
 
 naturalNumber :: Parser String
 naturalNumber = many1 digit
@@ -154,24 +164,3 @@ parseBoolean :: Parser Bool
 parseBoolean = pTrue <|> pFalse
   where pTrue = True <$ (tryString "true" <|> tryString "True")
         pFalse = False <$ (tryString "false" <|> tryString "False")
-
--- ++++++++++++++++++++
--- ADHOC TEST FUNCTIONS
--- ++++++++++++++++++++
--- log_file_path = "/home/bmiww/comproller_log_parsed2"
--- config_file_path = "/home/bmiww/.config/compton.conf_"
-
--- testParser :: IO ()
--- testParser = do
---   result <- (parseComptonFile config_file_path)
---   writeFile log_file_path (show result)
---   print (show result)
-
--- test2 :: IO ()
--- test2 = do
---   result <- (parseComptonFile config_file_path)
---   handle <- openFile log_file_path ReadMode
---   contents <- hGetContents handle
---   let matching = (show result) == contents
---   print matching
---   print result
