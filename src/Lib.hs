@@ -2,10 +2,7 @@ module Lib
     ( defaultMain
     ) where
 
-import           CommandLineParser (ConsoleArguments (..), CurrentWindow (..),
-                                    FlagArg (..), FlagChangeAction (..),
-                                    IdentifyBy (..), ProgramMode (..),
-                                    WinArg (..), parseCommandLine)
+import           CommandLineParser
 import           ComptonParser     (parseComptonFile)
 import           ComptonStatic
 import           ComptonTypes      (Comparer (..), Entry, OpacityValue (..),
@@ -56,13 +53,13 @@ getResetOption configPath entries = case find (\(name, _) -> name == paintOnOver
   Just (_, _)              -> error "Configuration problem - paint on overlay is not of boolean type"
   where oldReset = killAndLaunchCompton configPath
 
-changeOpaciteeeh :: Selector -> Integer -> String -> [Entry] -> [Entry]
-changeOpaciteeeh selector opacity windowName = replaceValue thing "opacity-rule"
-  where thing = ehThisIsBad selector opacity windowName
+changeOpaciteeeh :: Selector -> Comparer -> Integer -> String -> [Entry] -> [Entry]
+changeOpaciteeeh selector comparer opacity windowName = replaceValue thing c_opacityRule
+  where thing = ehThisIsBad selector comparer opacity windowName
 
-ehThisIsBad :: Selector -> Integer -> String -> Maybe Entry -> Entry
-ehThisIsBad selector opacity windowName (Just (_, OpacityRules imAFuckOffValue)) = ("opacity-rule", changeOpacity opacity selector windowName imAFuckOffValue)
-ehThisIsBad selector opacity windowName (Nothing) = ("opacity-rule", changeOpacity opacity selector windowName [])
+ehThisIsBad :: Selector -> Comparer -> Integer -> String -> Maybe Entry -> Entry
+ehThisIsBad selector comparer opacity windowName (Just (_, OpacityRules imAFuckOffValue)) = (c_opacityRule, changeOpacity opacity selector comparer windowName imAFuckOffValue)
+ehThisIsBad selector comparer opacity windowName (Nothing) = (c_opacityRule, changeOpacity opacity selector comparer windowName [])
 
 replaceValue :: (Maybe Entry -> Entry) -> String -> [Entry] -> [Entry]
 replaceValue applyChange entryName entries = replaceValue' applyChange $ breakage
@@ -99,10 +96,19 @@ comptonUpdate configPath updateFunc =
         newComptonFile = updateFunc <$> comptonResult
 
 windowModeFlow :: String -> WinArg -> IO ()
-windowModeFlow configPath (WinArg NoActiveWindowSelect _ _) = error "NOT IMPLEMENTED"
+windowModeFlow configPath (WinArg (NoActiveWindowSelect windowName matcher sensitivity) windowIdentifier opacity) =
+  comptonUpdate configPath updateFunc
+  where updateFunc = changeOpaciteeeh comptonSelector matchingComparer opacity windowName
+        comptonSelector = windowIdentifierSelector windowIdentifier
+        matchingComparer = case (matcher, sensitivity) of
+          (PartialMatch, SensitiveMatch)   -> Like
+          (PartialMatch, InsensitiveMatch) -> LikeInsens
+          (EqualMatch, SensitiveMatch)     -> Equal
+          (EqualMatch, InsensitiveMatch)   -> EqualInsens
+-- TODO Maybe add the possibility to specify the string comparison types here too
 windowModeFlow configPath (WinArg SelectActiveWindow windowIdentifier opacity) =
   updateFunc >>= comptonUpdate configPath
-  where updateFunc = changeOpaciteeeh comptonSelector opacity <$> windowName
+  where updateFunc = changeOpaciteeeh comptonSelector Equal opacity <$> windowName
         comptonSelector = windowIdentifierSelector windowIdentifier
         windowName = parseWindowIdentifier $ windowIdentifierGetter windowIdentifier
 

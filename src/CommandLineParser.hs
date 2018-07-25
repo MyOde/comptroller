@@ -7,6 +7,8 @@ module CommandLineParser
   , FlagArg (..)
   , FlagChangeAction (..)
   , ConsoleArguments (..)
+  , EqualityMatcher (..)
+  , SensitivityMatcher (..)
   ) where
 
 import           ComptonStatic
@@ -24,13 +26,15 @@ defaultConfigPath = "/home/bmiww/.config/compton.conf"
 -- defaultConfigPath = "~/.config/compton.conf"
 
 -- TODO Move all of these - they should belong to the consumer or service not the parser
-data CurrentWindow = NoActiveWindowSelect | SelectActiveWindow
+data CurrentWindow = NoActiveWindowSelect String EqualityMatcher SensitivityMatcher | SelectActiveWindow
 data ShouldUseDmenu = NoDmenu | UseDmenu
 data IdentifyBy = ClassName | WindowName
 data FlagChangeAction = ToggleFlag | SetFlag | UnsetFlag | ListFlags
 -- TODO Rename flagmode to something else,
 -- its heavily interfering with the library names
 data ProgramMode = WindowMode WinArg | FlagMode FlagArg | DMenuMode
+data EqualityMatcher = EqualMatch | PartialMatch
+data SensitivityMatcher = SensitiveMatch | InsensitiveMatch
 
 data ConsoleArguments = ConsoleArguments
   { programMode       :: ProgramMode
@@ -72,11 +76,6 @@ listFlags = flag' ListFlags
   <> help "List available flag names"
   )
 
--- flagModeFlag :: Parser String
--- flagModeFlag = strOption
---   ( short 'F'
---   <> help "Flag mode - use to toggle or set values for true/false options"
---   )
 flagModeFlag :: Parser String
 flagModeFlag = checkOption <$> strOption
   ( short 'F'
@@ -107,9 +106,37 @@ unsetFlag = flag' UnsetFlag
 
 windowModeArgs :: Parser ProgramMode
 windowModeArgs = fmap WindowMode $ WinArg
-  <$> currentWindowFlag
+  <$> (useWindowMode *> (currentWindowFlag <|> specifyWindow))
   <*> (byClass <|> byWindowName)
   <*> opacityValue
+
+useWindowMode :: Parser Bool
+useWindowMode = flag' True
+  ( short 'W'
+  <> help "Use this flag to run the program in window mode"
+  )
+
+-- TODO Rename CurrentWindow type to SelectedWindow
+specifyWindow :: Parser CurrentWindow
+specifyWindow = NoActiveWindowSelect <$> specifyWindowName <*> specifyEquality <*> specifyMatchSensitivity
+
+specifyWindowName :: Parser String
+specifyWindowName = strOption
+  ( short 's'
+    <> help "Specify the name or class of the window to match"
+  )
+
+specifyEquality :: Parser EqualityMatcher
+specifyEquality = flag EqualMatch PartialMatch
+  ( short 'p'
+  <> help "Creates a rule with partial string match"
+  )
+
+specifyMatchSensitivity :: Parser SensitivityMatcher
+specifyMatchSensitivity = flag SensitiveMatch InsensitiveMatch
+  ( short 'i'
+  <> help "Compare window name with case insensitive matches"
+  )
 
 specifyConfigPath :: Parser String
 specifyConfigPath = strOption
@@ -119,8 +146,8 @@ specifyConfigPath = strOption
   )
 
 currentWindowFlag :: Parser CurrentWindow
-currentWindowFlag = flag NoActiveWindowSelect SelectActiveWindow
-  ( short 'C'
+currentWindowFlag = flag' SelectActiveWindow
+  ( short 'a'
     <> help "Window mode. Change attributes for a specific or class based window"
   )
 
