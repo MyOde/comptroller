@@ -1,11 +1,17 @@
 module CommandLineParser
   ( parseCommandLine
-  , ConsArg (..)
+  , WinArg (..)
   , CurrentWindow (..)
   , IdentifyBy (..)
+  , ProgramMode (..)
+  , FlagArg (..)
+  , FlagChangeAction (..)
+  , ConsoleArguments (..)
   ) where
 
+import           ComptonStatic
 import           Control.Applicative ((<**>), (<|>))
+import           Data.List           (find)
 import           Data.Semigroup      ((<>))
 import           Options.Applicative (Parser, ParserInfo, auto, execParser,
                                       flag, flag', fullDesc, header, help,
@@ -17,32 +23,93 @@ defaultConfigPath :: String
 defaultConfigPath = "/home/bmiww/.config/compton.conf"
 -- defaultConfigPath = "~/.config/compton.conf"
 
+-- TODO Move all of these - they should belong to the consumer or service not the parser
 data CurrentWindow = NoActiveWindowSelect | SelectActiveWindow
 data ShouldUseDmenu = NoDmenu | UseDmenu
 data IdentifyBy = ClassName | WindowName
+data FlagChangeAction = ToggleFlag | SetFlag | UnsetFlag | ListFlags
+-- TODO Rename flagmode to something else,
+-- its heavily interfering with the library names
+data ProgramMode = WindowMode WinArg | FlagMode FlagArg | DMenuMode
 
-data ConsArg = ConsArg
+data ConsoleArguments = ConsoleArguments
+  { programMode       :: ProgramMode
+  , configurationPath :: String
+  }
+
+data WinArg = WinArg
   { operateOnActiveWin :: CurrentWindow
   , identifyWindowWith :: IdentifyBy
   , opacity            :: Integer
-  , configPath         :: String
   }
 
-parseCommandLine :: IO ConsArg
+-- TODO Flag mode also needs config path - so add it somewhere higher around the part where
+-- We choose the mode
+data FlagArg = FlagArg
+  { selectedFlag     :: String
+  , flagChangeAction :: FlagChangeAction
+  }
+
+parseCommandLine :: IO ConsoleArguments
 parseCommandLine = execParser
   $ info
   (comptrollerOptions <**> helper)
-  ( fullDesc
-    <> progDesc "This here be the comptroller"
-    <> header "OFF WITH 'IS HEAD"
+  (fullDesc)
+
+comptrollerOptions :: Parser ConsoleArguments
+comptrollerOptions = ConsoleArguments
+  <$> (windowModeArgs <|> flagModeArgs)
+  <*> specifyConfigPath
+
+flagModeArgs :: Parser ProgramMode
+flagModeArgs = fmap FlagMode $ FlagArg
+  <$> flagModeFlag
+  <*> (toggleFlag <|> setFlag <|> unsetFlag <|> listFlags)
+
+listFlags :: Parser FlagChangeAction
+listFlags = flag' ListFlags
+  ( short 'l'
+  <> help "List available flag names"
   )
 
-comptrollerOptions :: Parser ConsArg
-comptrollerOptions = ConsArg
+-- flagModeFlag :: Parser String
+-- flagModeFlag = strOption
+--   ( short 'F'
+--   <> help "Flag mode - use to toggle or set values for true/false options"
+--   )
+flagModeFlag :: Parser String
+flagModeFlag = checkOption <$> strOption
+  ( short 'F'
+  <> help "Flag mode - use to toggle or set values for true/false options"
+  )
+  where checkOption = \flagName -> case find (== flagName) booleanEntries of
+          Nothing -> undefined
+          Just _  -> flagName
+
+
+toggleFlag :: Parser FlagChangeAction
+toggleFlag = flag' ToggleFlag
+  ( short 't'
+  <> help "Toggle specified flag"
+  )
+
+setFlag :: Parser FlagChangeAction
+setFlag = flag' SetFlag
+  ( short 's'
+  <> help "Sets the specfied flag value to true"
+  )
+
+unsetFlag :: Parser FlagChangeAction
+unsetFlag = flag' UnsetFlag
+  ( short 'u'
+  <> help "Sets the specfied flag value to false"
+  )
+
+windowModeArgs :: Parser ProgramMode
+windowModeArgs = fmap WindowMode $ WinArg
   <$> currentWindowFlag
   <*> (byClass <|> byWindowName)
   <*> opacityValue
-  <*> specifyConfigPath
 
 specifyConfigPath :: Parser String
 specifyConfigPath = strOption
@@ -54,7 +121,7 @@ specifyConfigPath = strOption
 currentWindowFlag :: Parser CurrentWindow
 currentWindowFlag = flag NoActiveWindowSelect SelectActiveWindow
   ( short 'C'
-    <> help "Will select the currently active window"
+    <> help "Window mode. Change attributes for a specific or class based window"
   )
 
 opacityValue :: Parser Integer

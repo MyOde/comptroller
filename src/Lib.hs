@@ -2,9 +2,12 @@ module Lib
     ( defaultMain
     ) where
 
-import           CommandLineParser (ConsArg (..), CurrentWindow (..),
-                                    IdentifyBy (..), parseCommandLine)
+import           CommandLineParser (ConsoleArguments (..), CurrentWindow (..),
+                                    FlagArg (..), FlagChangeAction (..),
+                                    IdentifyBy (..), ProgramMode (..),
+                                    WinArg (..), parseCommandLine)
 import           ComptonParser     (parseComptonFile)
+import           ComptonStatic
 import           ComptonTypes      (Comparer (..), Entry, OpacityValue (..),
                                     Selector (..), Value (..), getOpacityArray)
 import           ComptonUtilities  (changeOpacity, windowIdentifierSelector)
@@ -14,7 +17,7 @@ import           Data.List         (find)
 import           Data.Text         (unpack)
 import           Data.Text.IO      (readFile)
 import           Frontend          (launch)
-import           Prelude           hiding (readFile)
+import           Prelude           hiding (flip, readFile)
 import           Processes         (callXDOTool, callXProps, getComptonPID,
                                     kill, launchCompton, sendSIGUSR1)
 import           XpropParser       (getClassLine, getNameLine, parseXpropOutput)
@@ -47,29 +50,76 @@ windowIdentifierGetter WindowName = getNameLine
 paintOnOverlay = "paint-on-overlay"
 getResetOption :: String -> [Entry] -> IO ()
 getResetOption configPath entries = case find (\(name, _) -> name == paintOnOverlay) entries of
+  -- TODO Check if paint-on-overlay defaults to false...
   Nothing                  -> resetCompton
   Just (_, Enabled result) -> if result == True then oldReset else resetCompton
-  Just (_, _)              -> error "Configuration weirdness - paint on overlay is not of boolean type"
+  Just (_, _)              -> error "Configuration problem - paint on overlay is not of boolean type"
   where oldReset = killAndLaunchCompton configPath
 
 changeOpaciteeeh :: Selector -> Integer -> String -> [Entry] -> [Entry]
-changeOpaciteeeh selector opacity windowName allValues = replaceOrAdd ("opacity-rule", newOpacityArray) allValues
-  where opacityArray = getOpacityArray allValues
-        newOpacityArray = changeOpacity opacity selector windowName opacityArray
+changeOpaciteeeh selector opacity windowName = replaceValue thing "opacity-rule"
+  where thing = ehThisIsBad selector opacity windowName
 
-actOnArguments :: ConsArg -> IO ()
-actOnArguments (ConsArg NoActiveWindowSelect _ _ _) = error "NOT IMPLEMENTED"
-actOnArguments (ConsArg SelectActiveWindow windowIdentifier opacity configPath) =
+ehThisIsBad :: Selector -> Integer -> String -> Maybe Entry -> Entry
+ehThisIsBad selector opacity windowName (Just (_, OpacityRules imAFuckOffValue)) = ("opacity-rule", changeOpacity opacity selector windowName imAFuckOffValue)
+ehThisIsBad selector opacity windowName (Nothing) = ("opacity-rule", changeOpacity opacity selector windowName [])
+
+replaceValue :: (Maybe Entry -> Entry) -> String -> [Entry] -> [Entry]
+replaceValue applyChange entryName entries = replaceValue' applyChange $ breakage
+  where breakage = (break (\(name, _) -> name == entryName) entries)
+
+replaceValue' :: (Maybe Entry -> Entry) -> ([Entry], [Entry]) -> [Entry]
+replaceValue' applyChange (miss, hit:rest) = miss ++ (applyChange $ Just hit):rest
+replaceValue' applyChange (miss, [])       = miss ++ [(applyChange Nothing)]
+
+flipEnabledBool :: String -> [Entry] -> [Entry]
+flipEnabledBool flagName = replaceValue (flip flagName) flagName
+
+flip :: String -> Maybe Entry -> Entry
+flip flagName (Just (name, Enabled bool)) = (name, Enabled $ not bool)
+-- TODO some default value flipping???
+flip flagName Nothing                     = undefined
+
+setEnabledBool :: String -> [Entry] -> [Entry]
+setEnabledBool flagName = replaceValue set flagName
+  where set = \_ -> (flagName, Enabled True)
+
+unsetEnabledBool :: String -> [Entry] -> [Entry]
+unsetEnabledBool flagName = replaceValue unset flagName
+  where unset = \_ -> (flagName, Enabled False)
+
+comptonUpdate :: String -> ([Entry] -> [Entry]) -> IO ()
+comptonUpdate configPath updateFunc =
   newComptonFile
   >>= writeComptonConfig configPath
   >> newComptonFile
   >>= getResetOption configPath
-  where windowName = parseWindowIdentifier $ windowIdentifierGetter windowIdentifier
-        comptonResult = parseComptonFile . unpack
+  where comptonResult = parseComptonFile . unpack
           <$> readFile configPath
-        newComptonFile = changeOpaciteeeh comptonSelector opacity
-          <$> windowName <*> comptonResult
+        newComptonFile = updateFunc <$> comptonResult
+
+windowModeFlow :: String -> WinArg -> IO ()
+windowModeFlow configPath (WinArg NoActiveWindowSelect _ _) = error "NOT IMPLEMENTED"
+windowModeFlow configPath (WinArg SelectActiveWindow windowIdentifier opacity) =
+  updateFunc >>= comptonUpdate configPath
+  where updateFunc = changeOpaciteeeh comptonSelector opacity <$> windowName
         comptonSelector = windowIdentifierSelector windowIdentifier
+        windowName = parseWindowIdentifier $ windowIdentifierGetter windowIdentifier
+
+-- TODO Loads of boilerplate
+flagModeFlow :: String -> FlagArg -> IO ()
+flagModeFlow configPath (FlagArg flagName ToggleFlag) =
+  comptonUpdate configPath $ flipEnabledBool flagName
+flagModeFlow configPath (FlagArg flagName SetFlag) =
+  comptonUpdate configPath $ setEnabledBool flagName
+flagModeFlow configPath (FlagArg flagName UnsetFlag) =
+  comptonUpdate configPath $ unsetEnabledBool flagName
+flagModeFlow configPath (FlagArg flagName ListFlags) =
+  foldr1 (>>) $ map putStrLn booleanEntries
+
+chooseProgramFlow :: ConsoleArguments -> IO ()
+chooseProgramFlow (ConsoleArguments (WindowMode arguments) configPath) = windowModeFlow configPath arguments
+chooseProgramFlow (ConsoleArguments (FlagMode arguments) configPath)   = flagModeFlow configPath arguments
 
 defaultMain :: IO ()
-defaultMain = parseCommandLine >>= actOnArguments
+defaultMain = parseCommandLine >>= chooseProgramFlow
