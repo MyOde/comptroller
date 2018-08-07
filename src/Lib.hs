@@ -86,14 +86,13 @@ unsetEnabledBool flagName = replaceValue unset flagName
   where unset = \_ -> (flagName, Enabled False)
 
 comptonUpdate :: String -> ([Entry] -> [Entry]) -> IO ()
-comptonUpdate configPath updateFunc =
-  newComptonFile
-  >>= writeComptonConfig configPath
-  >> newComptonFile
-  >>= getResetOption configPath
+comptonUpdate configPath updateFunc = do
+  newComptonFile <- makeNewComptonFile
+  writeComptonConfig configPath newComptonFile
+  getResetOption configPath newComptonFile
   where comptonResult = parseComptonFile . unpack
           <$> readFile configPath
-        newComptonFile = updateFunc <$> comptonResult
+        makeNewComptonFile = updateFunc <$> comptonResult
 
 windowModeFlow :: String -> WinArg -> IO ()
 windowModeFlow configPath (WinArg (NoActiveWindowSelect windowName matcher sensitivity) windowIdentifier opacity) =
@@ -123,9 +122,16 @@ flagModeFlow configPath (FlagArg flagName UnsetFlag) =
 flagModeFlow configPath (FlagArg flagName ListFlags) =
   foldr1 (>>) $ map putStrLn booleanEntries
 
+restartModeFlow :: String -> IO ()
+restartModeFlow configPath =
+  comptonResult >>= getResetOption configPath
+  where comptonResult = parseComptonFile . unpack
+          <$> readFile configPath
+
 chooseProgramFlow :: ConsoleArguments -> IO ()
 chooseProgramFlow (ConsoleArguments (WindowMode arguments) configPath) = windowModeFlow configPath arguments
 chooseProgramFlow (ConsoleArguments (FlagMode arguments) configPath)   = flagModeFlow configPath arguments
+chooseProgramFlow (ConsoleArguments (RestartMode) configPath)   = restartModeFlow configPath
 
 defaultMain :: IO ()
 defaultMain = parseCommandLine >>= chooseProgramFlow
