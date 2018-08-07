@@ -32,7 +32,7 @@ data IdentifyBy = ClassName | WindowName
 data FlagChangeAction = ToggleFlag | SetFlag | UnsetFlag | ListFlags
 -- TODO Rename flagmode to something else,
 -- its heavily interfering with the library names
-data ProgramMode = WindowMode WinArg | FlagMode FlagArg | DMenuMode | RestartMode
+data ProgramMode = WindowMode WinArg | FlagMode FlagArg | DMenuMode | RestartMode | KillMode
 data EqualityMatcher = EqualMatch | PartialMatch
 data SensitivityMatcher = SensitiveMatch | InsensitiveMatch
 
@@ -62,13 +62,19 @@ parseCommandLine = execParser
 
 comptrollerOptions :: Parser ConsoleArguments
 comptrollerOptions = ConsoleArguments
-  <$> (windowModeArgs <|> flagModeArgs <|> restartCompton)
+  <$> (windowModeArgs <|> flagModeArgs <|> restartCompton <|> killCompton)
   <*> specifyConfigPath
 
 flagModeArgs :: Parser ProgramMode
 flagModeArgs = fmap FlagMode $ FlagArg
   <$> flagModeFlag
   <*> (toggleFlag <|> setFlag <|> unsetFlag <|> listFlags)
+
+killCompton :: Parser ProgramMode
+killCompton = flag' KillMode
+  ( short 'K'
+  <> help "Kills the running compton instance"
+  )
 
 restartCompton :: Parser ProgramMode
 restartCompton = flag' RestartMode
