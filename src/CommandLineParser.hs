@@ -32,7 +32,7 @@ data IdentifyBy = ClassName | WindowName
 data FlagChangeAction = ToggleFlag | SetFlag | UnsetFlag | ListFlags
 -- TODO Rename flagmode to something else,
 -- its heavily interfering with the library names
-data ProgramMode = WindowMode WinArg | FlagMode FlagArg | DMenuMode | RestartMode | KillMode
+data ProgramMode = OpacityMode WinArg | FlagMode FlagArg | DMenuMode | RestartMode | KillMode
 data EqualityMatcher = EqualMatch | PartialMatch
 data SensitivityMatcher = SensitiveMatch | InsensitiveMatch
 
@@ -117,15 +117,15 @@ unsetFlag = flag' UnsetFlag
   )
 
 windowModeArgs :: Parser ProgramMode
-windowModeArgs = fmap WindowMode $ WinArg
-  <$> (useWindowMode *> (currentWindowFlag <|> specifyWindow))
+windowModeArgs = fmap OpacityMode $ WinArg
+  <$> (useOpacityMode *> (currentWindowFlag <|> specifyWindow))
   <*> (byClass <|> byWindowName)
   <*> opacityValue
 
-useWindowMode :: Parser Bool
-useWindowMode = flag' True
-  ( short 'W'
-  <> help "Use this flag to run the program in window mode"
+useOpacityMode :: Parser Bool
+useOpacityMode = flag' True
+  ( short 'O'
+  <> help "Use this flag to run the program in opacity mode"
   )
 
 -- TODO Rename CurrentWindow type to SelectedWindow

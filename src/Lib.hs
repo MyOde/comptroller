@@ -132,7 +132,7 @@ killModeFlow :: IO ()
 killModeFlow = getComptonPID >>= kill
 
 chooseProgramFlow :: ConsoleArguments -> IO ()
-chooseProgramFlow (ConsoleArguments (WindowMode arguments) configPath) = windowModeFlow configPath arguments
+chooseProgramFlow (ConsoleArguments (OpacityMode arguments) configPath) = windowModeFlow configPath arguments
 chooseProgramFlow (ConsoleArguments (FlagMode arguments) configPath)   = flagModeFlow configPath arguments
 chooseProgramFlow (ConsoleArguments (RestartMode) configPath)   = restartModeFlow configPath
 chooseProgramFlow (ConsoleArguments (KillMode) configPath)   = killModeFlow
