@@ -4,7 +4,7 @@ module Lib
 
 import           CommandLineParser
 import           ComptonParser     (parseComptonFile)
-import           ComptonStatic
+import qualified ComptonStatic     as CS
 import           ComptonTypes      (Comparer (..), Entry, OpacityValue (..),
                                     Selector (..), Value (..), getOpacityArray)
 import           ComptonUtilities  (changeOpacity, windowIdentifierSelector)
@@ -13,10 +13,12 @@ import           Control.Monad     (liftM, void)
 import           Data.List         (find)
 import           Data.Text         (unpack)
 import           Data.Text.IO      (readFile)
-import           Frontend          (launch)
+import qualified Frontend.DMenu    as Dmenu
+import qualified Frontend.Terminal as Term
 import           Prelude           hiding (flip, readFile)
 import           Processes         (callXDOTool, callXProps, getComptonPID,
                                     kill, launchCompton, sendSIGUSR1)
+import           Wizard            (WizardState (..), wizardStep)
 import           XpropParser       (getClassLine, getNameLine, parseXpropOutput)
 
 replaceOrAdd :: Entry -> [Entry] -> [Entry]
@@ -54,12 +56,14 @@ getResetOption configPath entries = case find (\(name, _) -> name == paintOnOver
   where oldReset = killAndLaunchCompton configPath
 
 changeOpaciteeeh :: Selector -> Comparer -> Integer -> String -> [Entry] -> [Entry]
-changeOpaciteeeh selector comparer opacity windowName = replaceValue thing c_opacityRule
+changeOpaciteeeh selector comparer opacity windowName = replaceValue thing CS.c_opacityRule
   where thing = ehThisIsBad selector comparer opacity windowName
 
 ehThisIsBad :: Selector -> Comparer -> Integer -> String -> Maybe Entry -> Entry
-ehThisIsBad selector comparer opacity windowName (Just (_, OpacityRules imAFuckOffValue)) = (c_opacityRule, changeOpacity opacity selector comparer windowName imAFuckOffValue)
-ehThisIsBad selector comparer opacity windowName (Nothing) = (c_opacityRule, changeOpacity opacity selector comparer windowName [])
+ehThisIsBad selector comparer opacity windowName (Just (_, OpacityRules imAFuckOffValue)) =
+  (CS.c_opacityRule, changeOpacity opacity selector comparer windowName imAFuckOffValue)
+ehThisIsBad selector comparer opacity windowName (Nothing) =
+  (CS.c_opacityRule, changeOpacity opacity selector comparer windowName [])
 
 replaceValue :: (Maybe Entry -> Entry) -> String -> [Entry] -> [Entry]
 replaceValue applyChange entryName entries = replaceValue' applyChange $ breakage
@@ -85,13 +89,16 @@ unsetEnabledBool :: String -> [Entry] -> [Entry]
 unsetEnabledBool flagName = replaceValue unset flagName
   where unset = \_ -> (flagName, Enabled False)
 
+readComptonFile :: String -> IO [Entry]
+readComptonFile configPath = parseComptonFile . unpack
+          <$> readFile configPath
+
 comptonUpdate :: String -> ([Entry] -> [Entry]) -> IO ()
 comptonUpdate configPath updateFunc = do
   newComptonFile <- makeNewComptonFile
   writeComptonConfig configPath newComptonFile
   getResetOption configPath newComptonFile
-  where comptonResult = parseComptonFile . unpack
-          <$> readFile configPath
+  where comptonResult = readComptonFile configPath
         makeNewComptonFile = updateFunc <$> comptonResult
 
 windowModeFlow :: String -> WinArg -> IO ()
@@ -120,7 +127,23 @@ flagModeFlow configPath (FlagArg flagName SetFlag) =
 flagModeFlow configPath (FlagArg flagName UnsetFlag) =
   comptonUpdate configPath $ unsetEnabledBool flagName
 flagModeFlow configPath (FlagArg flagName ListFlags) =
-  foldr1 (>>) $ map putStrLn booleanEntries
+  foldr1 (>>) $ map putStrLn CS.booleanEntries
+
+wizardFlow :: String -> WizardArg -> IO ()
+wizardFlow configPath (WizardArg DMenuFrontend)    =
+  readComptonFile configPath >>=
+  runWizardSteps (Dmenu.launchSelect) Initial
+wizardFlow configPath (WizardArg TerminalFrontend) =
+  readComptonFile configPath >>=
+  runWizardSteps (Term.launchSelect) Initial
+
+runWizardSteps :: ([(String, WizardState)] -> IO WizardState) -> WizardState -> [Entry]-> IO ()
+runWizardSteps frontend wizState entries = do
+  wizardChoice <- frontend $ wizardStep wizState entries
+  case wizardChoice of
+    Exit        -> putStrLn "Exit"
+    SaveAndExit -> putStrLn "SaveAndExit"
+    other       -> runWizardSteps frontend other entries
 
 restartModeFlow :: String -> IO ()
 restartModeFlow configPath =
@@ -136,6 +159,7 @@ chooseProgramFlow (ConsoleArguments (OpacityMode arguments) configPath) = window
 chooseProgramFlow (ConsoleArguments (FlagMode arguments) configPath)   = flagModeFlow configPath arguments
 chooseProgramFlow (ConsoleArguments (RestartMode) configPath)   = restartModeFlow configPath
 chooseProgramFlow (ConsoleArguments (KillMode) configPath)   = killModeFlow
+chooseProgramFlow (ConsoleArguments (WizardMode arguments) configPath)   = wizardFlow configPath arguments
 
 defaultMain :: IO ()
 defaultMain = parseCommandLine >>= chooseProgramFlow

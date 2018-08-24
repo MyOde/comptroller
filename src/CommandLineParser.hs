@@ -9,6 +9,8 @@ module CommandLineParser
   , ConsoleArguments (..)
   , EqualityMatcher (..)
   , SensitivityMatcher (..)
+  , WizardArg (..)
+  , WizardFrontend (..)
   ) where
 
 import           ComptonStatic
@@ -49,7 +51,7 @@ data ProgramMode
   | FlagMode FlagArg
   | RestartMode
   | KillMode
-  | WizardMode
+  | WizardMode WizardArg
 data EqualityMatcher
   = EqualMatch
   | PartialMatch
@@ -74,19 +76,28 @@ data FlagArg
   , flagChangeAction :: FlagChangeAction
   }
 
+data WizardArg
+  = WizardArg
+  { frontend :: WizardFrontend
+  }
+
+availableModes :: Parser ProgramMode
+availableModes
+  = windowModeArgs
+  <|> flagModeArgs
+  <|> restartCompton
+  <|> killCompton
+  <|> wizardModeArgs
+
 parseCommandLine :: IO ConsoleArguments
-parseCommandLine
-  = execParser
-  $ info
+parseCommandLine = execParser $ info
   (comptrollerOptions <**> helper)
   (fullDesc)
 
 comptrollerOptions :: Parser ConsoleArguments
 comptrollerOptions = ConsoleArguments
-  <$> (windowModeArgs <|> flagModeArgs <|> restartCompton <|> killCompton)
+  <$> availableModes
   <*> specifyConfigPath
-
-
 
 flagModeArgs :: Parser ProgramMode
 flagModeArgs = fmap FlagMode $ FlagArg
@@ -173,6 +184,23 @@ specifyConfigPath = strOption
   <> value defaultConfigPath
   )
 
+-- WIZARD MODE FLAGS
+wizardModeArgs :: Parser ProgramMode
+wizardModeArgs = fmap WizardMode $ WizardArg
+  <$> (useWizardMode *> (dmenuFrontend <|> terminalFrontend))
+
+dmenuFrontend :: Parser WizardFrontend
+dmenuFrontend = flag' DMenuFrontend
+  ( short 'd'
+  <> help "Use a dmenu driven frontend"
+  )
+
+terminalFrontend :: Parser WizardFrontend
+terminalFrontend = flag' TerminalFrontend
+  ( short 't'
+  <> help "Use a terminal driven frontend"
+  )
+
 -- MODE FLAGS
 killCompton :: Parser ProgramMode
 killCompton = flag' KillMode
@@ -204,8 +232,8 @@ useOpacityMode = flag' True
   <> help "Use this flag to run the program in opacity mode"
   )
 
-useDmenu :: Parser ProgramMode
-useDmenu = flag' WizardMode
+useWizardMode :: Parser Bool
+useWizardMode  = flag' True
   ( short 'W'
     <> help "Specifies a wizard mode for setting up compton options with realtime changes and an option to commit all the values changed"
   )

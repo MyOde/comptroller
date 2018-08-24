@@ -1,5 +1,6 @@
 module ComptonStatic where
 
+-- 43 options
 c_shadow = "shadow"
 c_noDndShadow = "no-dnd-shadow"
 c_noDockShadow = "no-dock-shadow"
@@ -13,7 +14,7 @@ c_shadowGreen  = "shadow-green"
 c_shadowBlue  = "shadow-blue"
 c_shadowExclude  = "shadow-exclude"
 c_shadowIgnoreShaped  = "shadow-ignore-shaped"
-c_menuOpacity  = "menu-opacity"
+c_menuOpacity = "menu-opacity"
 c_inactiveOpacity  = "inactive-opacity"
 c_activeOpacity  = "active-opacity"
 c_frameOpacity  = "frame-opacity"
@@ -45,6 +46,16 @@ c_wintypes  = "wintypes"
 c_inactiveDimFixed  = "inactive-dim-fixed"
 c_opacityRule  = "opacity-rule"
 
+allEntries
+  = booleanEntries
+  ++ floatingEntries
+  ++ arrayEntries
+  ++ textualEntries
+  ++ [ c_opacityRule
+     , c_wintypes
+     ]
+
+-- 16
 booleanEntries =
   [ c_shadow
   , c_noDndShadow
@@ -64,6 +75,7 @@ booleanEntries =
   , c_detectClientLeader
   , c_glxCopyFromFront
   ]
+-- 15
 floatingEntries =
   [ c_shadowRadius
   , c_shadowOffsetX
@@ -83,6 +95,7 @@ floatingEntries =
   , c_refreshRate
   ]
 
+-- 5
 arrayEntries =
   [ c_shadowExclude
   , c_blurBackgroundExclude
@@ -91,6 +104,7 @@ arrayEntries =
   , c_invertColorInclude
   ]
 
+-- 4
 textualEntries =
   [ c_blurKern
   , c_backend
