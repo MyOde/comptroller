@@ -1,4 +1,4 @@
-module CommandLineParser
+module Terminal.Parser
   ( parseCommandLine
   , WinArg (..)
   , CurrentWindow (..)
@@ -7,8 +7,6 @@ module CommandLineParser
   , FlagArg (..)
   , FlagChangeAction (..)
   , ConsoleArguments (..)
-  , EqualityMatcher (..)
-  , SensitivityMatcher (..)
   , WizardArg (..)
   , WizardFrontend (..)
   ) where
@@ -21,20 +19,16 @@ import           Options.Applicative (Parser, ParserInfo, auto, execParser,
                                       flag, flag', fullDesc, header, help,
                                       helper, info, long, option, progDesc,
                                       short, strOption, value)
+import           Terminal.Types
 
 -- TODO Change this to relative path somewhere
 defaultConfigPath :: String
 defaultConfigPath = "/home/bmiww/.config/compton.conf"
 -- defaultConfigPath = "~/.config/compton.conf"
 
--- TODO Move all of these - they should belong to the consumer or service not the parser
-
 data CurrentWindow
   = NoActiveWindowSelect String EqualityMatcher SensitivityMatcher
   | SelectActiveWindow
-data IdentifyBy
-  = ClassName
-  | WindowName
 data FlagChangeAction
   = ToggleFlag
   | SetFlag
@@ -52,12 +46,6 @@ data ProgramMode
   | RestartMode
   | KillMode
   | WizardMode WizardArg
-data EqualityMatcher
-  = EqualMatch
-  | PartialMatch
-data SensitivityMatcher
-  = SensitiveMatch
-  | InsensitiveMatch
 
 data ConsoleArguments
   = ConsoleArguments
