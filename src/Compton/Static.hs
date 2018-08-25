@@ -1,4 +1,4 @@
-module ComptonStatic where
+module Compton.Static where
 
 -- 43 options
 c_shadow = "shadow"

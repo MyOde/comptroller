@@ -13,7 +13,7 @@ module CommandLineParser
   , WizardFrontend (..)
   ) where
 
-import           ComptonStatic
+import           Compton.Static
 import           Control.Applicative ((<**>), (<|>))
 import           Data.List           (find)
 import           Data.Semigroup      ((<>))

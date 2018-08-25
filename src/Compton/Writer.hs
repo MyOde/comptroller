@@ -1,11 +1,11 @@
 {-# LANGUAGE RecordWildCards #-}
-module ComptonWriter where
+module Compton.Writer where
 
-import           ComptonTypes
-import           Data.Text    (pack)
-import           Data.Text.IO (writeFile)
-import           Numeric      (showFFloat)
-import           Prelude      hiding (writeFile)
+import           Compton.Types
+import           Data.Text     (pack)
+import           Data.Text.IO  (writeFile)
+import           Numeric       (showFFloat)
+import           Prelude       hiding (writeFile)
 
 spaceEqual = " = "
 spaceColon = " :\n{\n"

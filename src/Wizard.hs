@@ -1,7 +1,7 @@
 module Wizard where
 
-import qualified ComptonStatic as CS
-import           ComptonTypes  (Entry, Value (..))
+import qualified Compton.Static as CS
+import           Compton.Types  (Entry, Value (..))
 import           Data.List     (filter)
 
 data WizardState

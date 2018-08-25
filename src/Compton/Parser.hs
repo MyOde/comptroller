@@ -1,10 +1,10 @@
 {-# LANGUAGE RecordWildCards #-}
-module ComptonParser
+module Compton.Parser
   ( parseComptonFile
   ) where
 
-import           ComptonStatic
-import           ComptonTypes
+import           Compton.Static
+import           Compton.Types
 import           Data.List                     (foldr1)
 import           Text.Parsec                   (ParseError, endBy, sepEndBy,
                                                 skipMany, try)
@@ -13,7 +13,7 @@ import           Text.Parsec.Char              (char, digit, noneOf, oneOf,
 import           Text.Parsec.Combinator        (option)
 import           Text.ParserCombinators.Parsec (Parser, many1, parse, (<|>))
 
-staticNameParser:: [String] -> Parser Value -> Parser Entry
+staticNameParser :: [String] -> Parser Value -> Parser Entry
 staticNameParser entryNames valueParser =
   foldr1 (<|>) (map (parseEntry valueParser) entryNames)
 

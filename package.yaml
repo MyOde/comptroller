@@ -27,6 +27,7 @@ dependencies:
 - dmenu
 - text
 - optparse-applicative
+- mtl
 
 library:
   source-dirs: src

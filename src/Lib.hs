@@ -1,15 +1,19 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Lib
     ( defaultMain
     ) where
 
-import           CommandLineParser
-import           ComptonParser     (parseComptonFile)
-import qualified ComptonStatic     as CS
-import           ComptonTypes      (Comparer (..), Entry, OpacityValue (..),
-                                    Selector (..), Value (..), getOpacityArray)
-import           ComptonUtilities  (changeOpacity, windowIdentifierSelector)
-import           ComptonWriter     (writeComptonConfig)
+import           CommandLineParser    as Clp
+import           Compton.Parser       (parseComptonFile)
+import qualified Compton.Static       as CS
+import           Compton.Types        (Comparer (..), Entry, OpacityValue (..),
+                                       Selector (..), Value (..),
+                                       getOpacityArray)
+import           Compton.Utilities    (changeOpacity, windowIdentifierSelector)
+import           Compton.Writer       (writeComptonConfig)
 import           Control.Monad     (liftM, void)
+import           Control.Monad.Reader (MonadIO, MonadReader, ReaderT, ask,
+                                       liftIO, runReaderT)
 import           Data.List         (find)
 import           Data.Text         (unpack)
 import           Data.Text.IO      (readFile)
@@ -19,7 +23,10 @@ import           Prelude           hiding (flip, readFile)
 import           Processes         (callXDOTool, callXProps, getComptonPID,
                                     kill, launchCompton, sendSIGUSR1)
 import           Wizard            (WizardState (..), wizardStep)
-import           XpropParser       (getClassLine, getNameLine, parseXpropOutput)
+import           XpropParser          (getClassLine, getNameLine,
+                                       parseXpropOutput)
+
+paintOnOverlay = "paint-on-overlay"
 
 replaceOrAdd :: Entry -> [Entry] -> [Entry]
 replaceOrAdd (name, value) [] = [(name, value)]
@@ -41,17 +48,16 @@ killAndLaunchCompton configPath =
 parseWindowIdentifier :: ([String] -> String) -> IO String
 parseWindowIdentifier getter = parseXpropOutput . getter . lines <$> parseProps
 
-
 windowIdentifierGetter :: IdentifyBy -> ([String] -> String)
 windowIdentifierGetter ClassName  = getClassLine
 windowIdentifierGetter WindowName = getNameLine
 
-paintOnOverlay = "paint-on-overlay"
 getResetOption :: String -> [Entry] -> IO ()
 getResetOption configPath entries = case find (\(name, _) -> name == paintOnOverlay) entries of
   -- TODO Check if paint-on-overlay defaults to false...
   Nothing                  -> resetCompton
-  Just (_, Enabled result) -> if result == True then oldReset else resetCompton
+  Just (_, Enabled True) -> oldReset
+  Just (_, Enabled False) -> resetCompton
   Just (_, _)              -> error "Configuration problem - paint on overlay is not of boolean type"
   where oldReset = killAndLaunchCompton configPath
 
@@ -93,73 +99,110 @@ readComptonFile :: String -> IO [Entry]
 readComptonFile configPath = parseComptonFile . unpack
           <$> readFile configPath
 
-comptonUpdate :: String -> ([Entry] -> [Entry]) -> IO ()
-comptonUpdate configPath updateFunc = do
-  newComptonFile <- makeNewComptonFile
-  writeComptonConfig configPath newComptonFile
-  getResetOption configPath newComptonFile
-  where comptonResult = readComptonFile configPath
-        makeNewComptonFile = updateFunc <$> comptonResult
+comptonUpdate :: ([Entry] -> [Entry]) -> ConsReadT ()
+comptonUpdate updateFunc = do
+  configPath <- askConfigPath
+  newComptonFile <- liftIO $ updateFunc <$> readComptonFile configPath
+  liftIO
+    $ writeComptonConfig configPath newComptonFile
+    >> getResetOption configPath newComptonFile
 
-windowModeFlow :: String -> WinArg -> IO ()
-windowModeFlow configPath (WinArg (NoActiveWindowSelect windowName matcher sensitivity) windowIdentifier opacity) =
-  comptonUpdate configPath updateFunc
-  where updateFunc = changeOpaciteeeh comptonSelector matchingComparer opacity windowName
-        comptonSelector = windowIdentifierSelector windowIdentifier
-        matchingComparer = case (matcher, sensitivity) of
-          (PartialMatch, SensitiveMatch)   -> Like
-          (PartialMatch, InsensitiveMatch) -> LikeInsens
-          (EqualMatch, SensitiveMatch)     -> Equal
-          (EqualMatch, InsensitiveMatch)   -> EqualInsens
--- TODO Maybe add the possibility to specify the string comparison types here too
-windowModeFlow configPath (WinArg SelectActiveWindow windowIdentifier opacity) =
-  updateFunc >>= comptonUpdate configPath
-  where updateFunc = changeOpaciteeeh comptonSelector Equal opacity <$> windowName
-        comptonSelector = windowIdentifierSelector windowIdentifier
-        windowName = parseWindowIdentifier $ windowIdentifierGetter windowIdentifier
+nameMatchComparer :: EqualityMatcher -> SensitivityMatcher -> Comparer
+nameMatchComparer PartialMatch SensitiveMatch   = Like
+nameMatchComparer PartialMatch InsensitiveMatch = LikeInsens
+nameMatchComparer EqualMatch SensitiveMatch     = Equal
+nameMatchComparer EqualMatch InsensitiveMatch   = EqualInsens
 
--- TODO Loads of boilerplate
-flagModeFlow :: String -> FlagArg -> IO ()
-flagModeFlow configPath (FlagArg flagName ToggleFlag) =
-  comptonUpdate configPath $ flipEnabledBool flagName
-flagModeFlow configPath (FlagArg flagName SetFlag) =
-  comptonUpdate configPath $ setEnabledBool flagName
-flagModeFlow configPath (FlagArg flagName UnsetFlag) =
-  comptonUpdate configPath $ unsetEnabledBool flagName
-flagModeFlow configPath (FlagArg flagName ListFlags) =
-  foldr1 (>>) $ map putStrLn CS.booleanEntries
+uncaseActiveWin :: CurrentWindow -> IdentifyBy -> IO (String, Comparer)
+uncaseActiveWin SelectActiveWindow identify = do
+  windowIdentifier <- parseWindowIdentifier $ windowIdentifierGetter $ identify
+  return (windowIdentifier, Equal)
 
-wizardFlow :: String -> WizardArg -> IO ()
-wizardFlow configPath (WizardArg DMenuFrontend)    =
-  readComptonFile configPath >>=
-  runWizardSteps (Dmenu.launchSelect) Initial
-wizardFlow configPath (WizardArg TerminalFrontend) =
-  readComptonFile configPath >>=
-  runWizardSteps (Term.launchSelect) Initial
+uncaseActiveWin (NoActiveWindowSelect windowName matcher sensitivity) identify = do
+  return (windowName, comparer)
+  where comparer = nameMatchComparer matcher sensitivity
 
-runWizardSteps :: ([(String, WizardState)] -> IO WizardState) -> WizardState -> [Entry]-> IO ()
+opacityFlow :: WinArg -> ConsReadT Perform
+opacityFlow flowArg = do
+  (windowName, comparer) <- liftIO
+    $ uncaseActiveWin (operateOnActiveWin flowArg) identifier
+  return $ ConfigUpdate (changeOpaciteeeh comptonSelector comparer (Clp.opacity flowArg) windowName)
+  where comptonSelector = windowIdentifierSelector $ identifier
+        identifier = identifyWindowWith flowArg
+
+flagFlow :: FlagArg -> ConsReadT Perform
+flagFlow flowArg = return $
+  case flagChangeAction flowArg of
+    ToggleFlag -> ConfigUpdate $ flipEnabledBool flagName
+    SetFlag    -> ConfigUpdate $ setEnabledBool flagName
+    UnsetFlag  -> ConfigUpdate $ unsetEnabledBool flagName
+    ListFlags  -> PrintList CS.booleanEntries
+    where flagName = selectedFlag flowArg
+
+wizardFlow :: WizardArg -> ConsReadT Perform
+wizardFlow flowArg = do
+  configPath <- askConfigPath
+  config <- liftIO $ readComptonFile configPath
+  newConfig <- liftIO $ runWizardSteps
+    (case frontend flowArg of
+      TerminalFrontend -> Term.launchSelect
+      DMenuFrontend    -> Dmenu.launchSelect)
+    Initial
+    config
+  return $ RunWizard $ newConfig
+
+runWizardSteps :: ([(String, WizardState)] -> IO WizardState) -> WizardState -> [Entry]-> IO [Entry]
 runWizardSteps frontend wizState entries = do
   wizardChoice <- frontend $ wizardStep wizState entries
   case wizardChoice of
-    Exit        -> putStrLn "Exit"
-    SaveAndExit -> putStrLn "SaveAndExit"
+    Exit        -> return entries
+    SaveAndExit -> return entries
     other       -> runWizardSteps frontend other entries
 
-restartModeFlow :: String -> IO ()
-restartModeFlow configPath =
-  comptonResult >>= getResetOption configPath
-  where comptonResult = parseComptonFile . unpack
-          <$> readFile configPath
+restartModeFlow :: ConsReadT Perform
+restartModeFlow = do
+  configPath <- askConfigPath
+  comptonConfig <- liftIO $ readComptonFile configPath
+  return $ Restart $ getResetOption configPath comptonConfig
 
-killModeFlow :: IO ()
-killModeFlow = getComptonPID >>= kill
+killCompton :: IO ()
+killCompton = getComptonPID >>= kill
 
-chooseProgramFlow :: ConsoleArguments -> IO ()
-chooseProgramFlow (ConsoleArguments (OpacityMode arguments) configPath) = windowModeFlow configPath arguments
-chooseProgramFlow (ConsoleArguments (FlagMode arguments) configPath)   = flagModeFlow configPath arguments
-chooseProgramFlow (ConsoleArguments (RestartMode) configPath)   = restartModeFlow configPath
-chooseProgramFlow (ConsoleArguments (KillMode) configPath)   = killModeFlow
-chooseProgramFlow (ConsoleArguments (WizardMode arguments) configPath)   = wizardFlow configPath arguments
+newtype ConsReadT a = ConsReadT
+  { runConsArgRead :: ReaderT ConsoleArguments IO a
+  } deriving (Applicative, Monad, Functor, MonadReader ConsoleArguments, MonadIO)
+
+askConfigPath :: ConsReadT String
+askConfigPath = configurationPath <$> ask
+
+data Perform
+  = ConfigUpdate ([Entry] -> [Entry])
+  | PrintList [String]
+  | Kill
+  -- TODO You're asking to be hurt
+  | Restart (IO ())
+  | RunWizard [Entry]
+
+chooseProgramFlow :: ConsReadT ()
+chooseProgramFlow = do
+  progMode <- programMode <$> ask
+  actionToTake <- case progMode of
+    OpacityMode arguments -> opacityFlow arguments
+    FlagMode arguments    -> flagFlow arguments
+    KillMode              -> return Kill
+    RestartMode           -> restartModeFlow
+    WizardMode arguments  -> wizardFlow arguments
+  takeAction actionToTake
+
+takeAction :: Perform -> ConsReadT ()
+takeAction actionToTake =
+  case actionToTake of
+    ConfigUpdate function -> comptonUpdate function
+    PrintList strings     -> liftIO $ foldr1 (>>) $ map putStrLn strings
+    Kill                  -> liftIO killCompton
+    Restart ioAction      -> liftIO ioAction
+    RunWizard newEntries  -> takeAction $ ConfigUpdate (\_ -> newEntries)
 
 defaultMain :: IO ()
-defaultMain = parseCommandLine >>= chooseProgramFlow
+defaultMain = parseCommandLine
+  >>= runReaderT (runConsArgRead chooseProgramFlow)

@@ -1,7 +1,8 @@
-module ComptonUtilities where
+module Compton.Utilities where
 
+-- TODO move IdentifyBy to an outside file.
 import           CommandLineParser (IdentifyBy (..))
-import           ComptonTypes
+import           Compton.Types
 
 changeOpacity :: Integer -> Selector -> Comparer -> String -> [OpacityValue] -> Value
 changeOpacity opacity selector comparer programName rules = OpacityRules $ newRule:rules

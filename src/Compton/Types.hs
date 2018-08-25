@@ -1,4 +1,4 @@
-module ComptonTypes where
+module Compton.Types where
 
 import           Data.List (find)
 
