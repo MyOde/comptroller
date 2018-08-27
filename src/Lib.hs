@@ -1,4 +1,3 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Lib
     ( defaultMain
     ) where
@@ -12,27 +11,22 @@ import           Compton.Types        (Comparer (..), Entry, OpacityValue (..),
 import           Compton.Utilities    (changeOpaciteeeh, flipEnabledBool,
                                        setEnabledBool, unsetEnabledBool)
 import           Compton.Writer       (writeComptonConfig)
-import           Control.Monad.Reader (MonadIO, MonadReader, ReaderT, ask,
-                                       liftIO, runReaderT)
+import           Control.Monad.Reader (ask, liftIO, runReaderT)
 import           Data.List         (find)
+-- TODO Used only for strict readFile
 import           Data.Text         (unpack)
 import           Data.Text.IO      (readFile)
-import qualified Frontend.DMenu    as Dmenu
-import qualified Frontend.Terminal as Term
 import           Prelude           hiding (flip, readFile)
 import           Processes         (callXDOTool, callXProps, getComptonPID,
                                     kill, launchCompton, sendSIGUSR1)
 import           Terminal.Parser      as TP
-import           TypeMap              (nameMatchComparer,
+import           TypeMap              (ConsReadT, askConfigPath,
+                                       nameMatchComparer, runConsArgRead,
                                        windowIdentifierSelector)
-import           Wizard            (WizardState (..), wizardStep)
+import           WizardFlow           (wizardFlow)
 import           Xprops.Parser        (parseXpropOutput)
 import           Xprops.Utilities     (getClassLine, getNameLine,
                                        windowIdentifierGetter)
-
-newtype ConsReadT a = ConsReadT
-  { runConsArgRead :: ReaderT ConsoleArguments IO a
-  } deriving (Applicative, Monad, Functor, MonadReader ConsoleArguments, MonadIO)
 
 data Perform
   = ConfigUpdate ([Entry] -> [Entry])
@@ -40,7 +34,6 @@ data Perform
   | Kill
   -- TODO You're asking to be hurt
   | Restart (IO ())
-  | RunWizard [Entry]
 
 -- TODO Find something existing or generalize this
 replaceOrAdd :: Entry -> [Entry] -> [Entry]
@@ -111,26 +104,6 @@ flagFlow flowArg = return $
     ListFlags  -> PrintList CS.booleanEntries
     where flagName = selectedFlag flowArg
 
-wizardFlow :: WizardArg -> ConsReadT Perform
-wizardFlow flowArg = do
-  configPath <- askConfigPath
-  config <- liftIO $ readComptonFile configPath
-  newConfig <- liftIO $ runWizardSteps
-    (case frontend flowArg of
-      TerminalFrontend -> Term.launchSelect
-      DMenuFrontend    -> Dmenu.launchSelect)
-    Initial
-    config
-  return $ RunWizard $ newConfig
-
-runWizardSteps :: ([(String, WizardState)] -> IO WizardState) -> WizardState -> [Entry]-> IO [Entry]
-runWizardSteps frontend wizState entries = do
-  wizardChoice <- frontend $ wizardStep wizState entries
-  case wizardChoice of
-    Exit        -> return entries
-    SaveAndExit -> return entries
-    other       -> runWizardSteps frontend other entries
-
 restartModeFlow :: ConsReadT Perform
 restartModeFlow = do
   configPath <- askConfigPath
@@ -140,9 +113,6 @@ restartModeFlow = do
 killCompton :: IO ()
 killCompton = getComptonPID >>= kill
 
-askConfigPath :: ConsReadT String
-askConfigPath = configurationPath <$> ask
-
 chooseProgramFlow :: ConsReadT ()
 chooseProgramFlow = do
   progMode <- programMode <$> ask
@@ -151,7 +121,11 @@ chooseProgramFlow = do
     FlagMode arguments    -> flagFlow arguments
     KillMode              -> return Kill
     RestartMode           -> restartModeFlow
-    WizardMode arguments  -> wizardFlow arguments
+    WizardMode arguments  -> do
+      configPath <- askConfigPath
+      config <- liftIO $ readComptonFile configPath
+      newConfig <- wizardFlow arguments config
+      return $ ConfigUpdate $ (\_ -> newConfig)
   takeAction actionToTake
 
 takeAction :: Perform -> ConsReadT ()
@@ -161,7 +135,6 @@ takeAction actionToTake =
     PrintList strings     -> liftIO $ foldr1 (>>) $ map putStrLn strings
     Kill                  -> liftIO killCompton
     Restart ioAction      -> liftIO ioAction
-    RunWizard newEntries  -> takeAction $ ConfigUpdate (\_ -> newEntries)
 
 defaultMain :: IO ()
 defaultMain = parseCommandLine

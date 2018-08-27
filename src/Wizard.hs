@@ -4,7 +4,7 @@ import qualified Compton.Static as CS
 import           Compton.Types  (Entry, Value (..))
 import           Data.List     (filter)
 
-data WizardState
+data WizardStep
   = Initial
   | ChooseFlagEntry
   | ChooseNumberEntry
@@ -12,19 +12,19 @@ data WizardState
   | SaveAndExit
   | Exit
 
-saveAndExit :: (String, WizardState)
+saveAndExit :: (String, WizardStep)
 saveAndExit = ("Save & exit", SaveAndExit)
 
-exit :: (String, WizardState)
+exit :: (String, WizardStep)
 exit = ("Exit", Exit)
 
-changeNumeric :: (String, WizardState)
+changeNumeric :: (String, WizardStep)
 changeNumeric = ("Change numeric", ChooseNumberEntry)
 
-changeFlag :: (String, WizardState)
+changeFlag :: (String, WizardStep)
 changeFlag = ("Toggle flag", ChooseFlagEntry)
 
-wizardStep :: WizardState -> [Entry] -> [(String, WizardState)]
+wizardStep :: WizardStep -> [Entry] -> [(String, WizardStep)]
 wizardStep Initial _ =
   [ changeFlag
   , changeNumeric
