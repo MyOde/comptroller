@@ -26,49 +26,6 @@ defaultConfigPath :: String
 defaultConfigPath = "/home/bmiww/.config/compton.conf"
 -- defaultConfigPath = "~/.config/compton.conf"
 
-data CurrentWindow
-  = NoActiveWindowSelect String EqualityMatcher SensitivityMatcher
-  | SelectActiveWindow
-data FlagChangeAction
-  = ToggleFlag
-  | SetFlag
-  | UnsetFlag
-  | ListFlags
-data WizardFrontend
-  = DMenuFrontend
-  | TerminalFrontend
--- TODO Rename flagmode to something else,
--- its heavily interfering with the library names
-
-data ProgramMode
-  = OpacityMode WinArg
-  | FlagMode FlagArg
-  | RestartMode
-  | KillMode
-  | WizardMode WizardArg
-
-data ConsoleArguments
-  = ConsoleArguments
-  { programMode       :: ProgramMode
-  , configurationPath :: String
-  }
-data WinArg
-  = WinArg
-  { operateOnActiveWin :: CurrentWindow
-  , identifyWindowWith :: IdentifyBy
-  , opacity            :: Integer
-  }
-data FlagArg
-  = FlagArg
-  { selectedFlag     :: String
-  , flagChangeAction :: FlagChangeAction
-  }
-
-data WizardArg
-  = WizardArg
-  { frontend :: WizardFrontend
-  }
-
 availableModes :: Parser ProgramMode
 availableModes
   = windowModeArgs
