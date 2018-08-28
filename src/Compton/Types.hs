@@ -1,10 +1,13 @@
 module Compton.Types where
 
 import           Data.List (find)
+import           Data.Map.Strict (Map)
 
 -- TODO Remember to remove all the show derivations - they're not
 -- needed beyond debugging purposes
+
 type Entry = (String, Value)
+type ComptonMap = Map String Value
 
 data OpacityValue = OpacityValue { opacity    :: Integer
                                  , selector   :: Selector
@@ -32,17 +35,8 @@ data Value
   | Numeric Integer
   | Floating Double
   | WinTypes [WinType]
-  | OpacityRules [OpacityValue]
+  | OpacityRules { opacityValues :: [OpacityValue] }
   | RegularRules [RegularValue] deriving (Show)
-
-getOpacityArray :: [Entry] -> Value
-getOpacityArray entries = case maybeFound of
-  Nothing          -> OpacityRules []
-  Just (_, result) -> result
-  where maybeFound = find (\(name, valueType) -> case valueType of
-                              (OpacityRules _) -> True
-                              _                -> False
-                          ) entries
 
 selectorString :: Selector -> String
 selectorString Class      = "class_g"

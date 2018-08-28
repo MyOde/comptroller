@@ -2,6 +2,7 @@
 module Compton.Writer where
 
 import           Compton.Types
+import           Data.Map.Strict (toList)
 import           Data.Text     (pack)
 import           Data.Text.IO  (writeFile)
 import           Numeric       (showFFloat)
@@ -24,12 +25,12 @@ addNewLine original = original ++ "\n"
 doubleTab :: String -> String
 doubleTab original = "\t\t" ++ original
 
-writeComptonConfig :: String -> [Entry] -> IO ()
+writeComptonConfig :: String -> ComptonMap -> IO ()
 writeComptonConfig configPath entries = writeFile configPath
   $ pack $ createComptonLines entries >>= addNewLine
 
-createComptonLines :: [Entry] -> [String]
-createComptonLines entries = map comptonLine entries
+createComptonLines :: ComptonMap -> [String]
+createComptonLines entries = map comptonLine $ toList entries
 
 comptonLine :: Entry -> String
 comptonLine (name, value) =

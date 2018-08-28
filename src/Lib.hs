@@ -5,15 +5,17 @@ module Lib
 -- TODO Split out?
 import           Compton.Parser       (parseComptonFile)
 import qualified Compton.Static       as CS
-import           Compton.Types        (Comparer (..), Entry, OpacityValue (..),
-                                       Selector (..), Value (..),
-                                       getOpacityArray)
+import           Compton.Types        (Comparer (..), ComptonMap, Entry,
+                                       OpacityValue (..), Selector (..),
+                                       Value (..))
 import           Compton.Utilities    (changeOpaciteeeh, flipEnabledBool,
-                                       setEnabledBool, unsetEnabledBool)
+                                       getOpacityArray, setEnabledBool,
+                                       unsetEnabledBool)
 import           Compton.Writer       (writeComptonConfig)
 import           Control.Monad.Reader (ask, liftIO, runReaderT)
 import           Data.List         (find)
 -- TODO Used only for strict readFile
+import           Data.Map.Strict      ((!?))
 import           Data.Text         (unpack)
 import           Data.Text.IO      (readFile)
 import           Prelude           hiding (flip, readFile)
@@ -29,7 +31,7 @@ import           Xprops.Utilities     (getClassLine, getNameLine,
                                        windowIdentifierGetter)
 
 data Perform
-  = ConfigUpdate ([Entry] -> [Entry])
+  = ConfigUpdate (ComptonMap -> ComptonMap)
   | PrintList [String]
   | Kill
   -- TODO You're asking to be hurt
@@ -53,29 +55,29 @@ killAndLaunchCompton :: String -> IO ()
 killAndLaunchCompton configPath =
   getComptonPID >>= kill >> launchCompton configPath
 
-getResetOption :: String -> [Entry] -> IO ()
-getResetOption configPath entries = case find (\(name, _) -> name == CS.c_paintOnOverlay) entries of
+getResetOption :: String -> ComptonMap -> IO ()
+-- getResetOption configPath entries = case find (\(name, _) -> name == CS.c_paintOnOverlay) entries of
+getResetOption configPath entries = case entries !? CS.c_paintOnOverlay of
   -- TODO Check if paint-on-overlay defaults to false...
   Nothing                  -> resetCompton
-  Just (_, Enabled True) -> oldReset
-  Just (_, Enabled False) -> resetCompton
-  Just (_, _)              -> error "Configuration problem - paint on overlay is not of boolean type"
+  Just (Enabled True) -> oldReset
+  Just (Enabled False) -> resetCompton
+  Just _              -> error "Configuration problem - paint on overlay is not of boolean type"
   where oldReset = killAndLaunchCompton configPath
 
 -- TODO Maybe make everything use the text module?
-readComptonFile :: String -> IO [Entry]
+readComptonFile :: String -> IO ComptonMap
 readComptonFile configPath = parseComptonFile
   . unpack
           <$> readFile configPath
 
-comptonUpdate :: ([Entry] -> [Entry]) -> ConsReadT ()
+comptonUpdate :: (ComptonMap -> ComptonMap) -> ConsReadT ()
 comptonUpdate updateFunc = do
   configPath <- askConfigPath
   newComptonFile <- liftIO $ updateFunc <$> readComptonFile configPath
   liftIO
     $ writeComptonConfig configPath newComptonFile
     >> getResetOption configPath newComptonFile
-
 
 uncaseActiveWin :: CurrentWindow -> IdentifyBy -> IO (String, Comparer)
 uncaseActiveWin SelectActiveWindow identify = do

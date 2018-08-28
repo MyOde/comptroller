@@ -9,16 +9,16 @@ import           Terminal.Types
 import           TypeMap
 -- TODO Consider merghing the Wizard file and this one?
 -- Or leave this one as is - since its mostly dealing with IO
-import           Compton.Types            (Entry)
+import           Compton.Types            (ComptonMap, Entry)
 import           Wizard                   (WizardStep (..), wizardStep)
 
 
 -- newtype WizardStateT a = WizardStateT
 --   { runWizardState :: StateT [Entry] ConsReadT a
 --   } (Applicative, Monad, Functor, MonadState [Entry], MonadIO)
-type WizardStateT a = StateT [Entry] ConsReadT a
+type WizardStateT a = StateT ComptonMap ConsReadT a
 
-wizardFlow :: WizardArg -> [Entry] -> ConsReadT [Entry]
+wizardFlow :: WizardArg -> ComptonMap -> ConsReadT ComptonMap
 wizardFlow flowArg initialEntries = do
   configPath <- askConfigPath
   newConfig <- execStateT wizardStepper initialEntries

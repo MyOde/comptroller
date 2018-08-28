@@ -6,12 +6,14 @@ module Compton.Parser
 import           Compton.Static
 import           Compton.Types
 import           Data.List                     (foldr1)
+import           Data.Map.Strict               (fromList)
 import           Text.Parsec                   (ParseError, endBy, sepEndBy,
                                                 skipMany, try)
 import           Text.Parsec.Char              (char, digit, noneOf, oneOf,
                                                 string)
 import           Text.Parsec.Combinator        (option)
 import           Text.ParserCombinators.Parsec (Parser, many1, parse, (<|>))
+
 
 staticNameParser :: [String] -> Parser Value -> Parser Entry
 staticNameParser entryNames valueParser =
@@ -43,15 +45,15 @@ parseAnyEntry = parseBooleanEntry
                 <|> parseOpacityRuleEntry
                 <|> parseWinTypesEntry
 
-parseComptonFile :: String -> [Entry]
+parseComptonFile :: String -> ComptonMap
 parseComptonFile fileContents = case parse comptonConfigParser "(unknown)" fileContents of
   Left errorMessage -> error
                       $ "Failed parsing compton configuration file:\n"
                       ++ show errorMessage
   Right result      -> result
 
-comptonConfigParser :: Parser [Entry]
-comptonConfigParser = endBy parseAnyEntry (char ';' <* whitespace)
+comptonConfigParser :: Parser ComptonMap
+comptonConfigParser = fromList <$> endBy parseAnyEntry (char ';' <* whitespace)
 
 whitespace :: Parser ()
 whitespace = skipMany $ oneOf " \t\n"
