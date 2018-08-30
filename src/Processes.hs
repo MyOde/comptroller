@@ -1,7 +1,7 @@
 module Processes
   ( callXDOTool
   , callXProps
-  , getComptonPID
+  , getPIDByName
   , kill
   , sendSIGUSR1
   , launchCompton
@@ -31,9 +31,6 @@ callXProps id = readProcess' xprop $ xpropIdArguments id
 getPIDByName :: String -> IO String
 getPIDByName name = unpack . strip . pack
   <$> readProcess' "pidof" [name]
-
-getComptonPID :: IO String
-getComptonPID = getPIDByName "compton"
 
 kill :: String -> IO ()
 kill pid = callProcess killCommand [pid]

@@ -2,13 +2,17 @@ module Wizard where
 
 import qualified Compton.Static as CS
 import           Compton.Types   (ComptonMap, Entry, Value (..))
-import           Data.Map.Strict (filterWithKey, toList)
+import           Data.Map.Strict (filterWithKey, toList, (!?))
+import           Numeric         (showFFloat)
 
 data WizardStep
   = Initial
   | ChooseFlagEntry
   | ChooseNumberEntry
+  | ChooseEnumEntry
   | ChangeFlag String
+  | InputNumber String
+  | Back WizardStep
   | SaveAndExit
   | Exit
 
@@ -18,11 +22,17 @@ saveAndExit = ("Save & exit", SaveAndExit)
 exit :: (String, WizardStep)
 exit = ("Exit", Exit)
 
+back :: WizardStep -> (String, WizardStep)
+back next = ("Back", Back next)
+
 changeNumeric :: (String, WizardStep)
 changeNumeric = ("Change numeric", ChooseNumberEntry)
 
 changeFlag :: (String, WizardStep)
 changeFlag = ("Toggle flag", ChooseFlagEntry)
+
+persistentChoices :: WizardStep -> [(String, WizardStep)]
+persistentChoices next = [back next, saveAndExit, exit]
 
 -- TODO You will probably update this to use some state monad?
 wizardStep :: WizardStep -> ComptonMap -> [(String, WizardStep)]
@@ -33,7 +43,10 @@ wizardStep Initial _ =
   , exit
   ]
 
-wizardStep ChooseFlagEntry entries = dynEntries ++ [saveAndExit, exit]
+-- TODO This will only select the existing values
+-- If a user does not have some values specified in their config
+-- They will not appear in the wizard
+wizardStep ChooseFlagEntry entries = dynEntries ++ persistentChoices Initial
   -- TODO quick and dirty patch to filter by the keys in the compton map
   where entriesWithValues = filterWithKey
                             (\name _ -> any
@@ -49,6 +62,33 @@ wizardStep ChooseFlagEntry entries = dynEntries ++ [saveAndExit, exit]
           -- TODO also quite dirty - maybe its possible to fmap or traverse/fold directly into a list type
           $ toList entriesWithValues
 
+-- TODO Make a spacer that checks the length of text in order to space values depending on longest
+-- Will most definitely fail on non-monospace fonts
+wizardStep ChooseNumberEntry entries = pretty ++ persistentChoices Initial
+  where numbersWithValues = fmap (mixWithNumberValue entries) CS.floatingEntries
+        maxLength = maximum . map (stringLength . third) $ numbersWithValues
+        pretty = map (\(name, step, val) -> (ppWithValue val name maxLength, step)) numbersWithValues
+
+third :: (a,b,c) -> c
+third (_,_,val) = val
+
+-- TODO Maybe generalize retreival of length in an outside wrapper iterator function
+ppWithValue :: Show a => a -> String -> Int -> String
+ppWithValue val name longestVal = stringVal ++ spaces ++ name
+  where stringVal = show val
+        numberOfSpaces = length stringVal - longestVal
+        spaces = map (\_->' ') [0..numberOfSpaces]
+
+stringLength :: Show a => a -> Int
+stringLength = length . show
+
+mixWithNumberValue :: ComptonMap -> String -> (String, WizardStep, Value)
+mixWithNumberValue entries name = case entries !? name of
+  Just result -> (name, InputNumber name, result)
+  -- TODO Fake magic 0. Should find default values for all of these
+  Nothing     -> (name, InputNumber name, Floating 0)
+
+
 dirtyBoolExtract :: Value -> String
-dirtyBoolExtract (Enabled False) = "T"
-dirtyBoolExtract (Enabled True)  = "F"
+dirtyBoolExtract (Enabled False) = "F"
+dirtyBoolExtract (Enabled True)  = "T"

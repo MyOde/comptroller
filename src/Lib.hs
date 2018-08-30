@@ -9,7 +9,8 @@ import           Compton.Types        (Comparer (..), ComptonMap, Entry,
                                        OpacityValue (..), Selector (..),
                                        Value (..))
 import           Compton.Utilities    (changeOpaciteeeh, flipEnabledBool,
-                                       getOpacityArray, setEnabledBool,
+                                       getComptonPID, getOpacityArray,
+                                       getResetOption, setEnabledBool,
                                        unsetEnabledBool)
 import           Compton.Writer       (writeComptonConfig)
 import           Control.Monad.Reader (ask, liftIO, runReaderT)
@@ -19,8 +20,7 @@ import           Data.Map.Strict      ((!?))
 import           Data.Text         (unpack)
 import           Data.Text.IO      (readFile)
 import           Prelude           hiding (flip, readFile)
-import           Processes         (callXDOTool, callXProps, getComptonPID,
-                                    kill, launchCompton, sendSIGUSR1)
+import           Processes            (callXDOTool, callXProps, kill)
 import           Terminal.Parser      as TP
 import           TypeMap              (ConsReadT, askConfigPath,
                                        nameMatchComparer, runConsArgRead,
@@ -45,25 +45,9 @@ replaceOrAdd (name, value) ((curName, curValue):rest) =
   then (name, value):rest
   else (curName, curValue) : replaceOrAdd (name, value) rest
 
-resetCompton :: IO ()
-resetCompton = getComptonPID >>= sendSIGUSR1
 
 parseProps :: IO String
 parseProps = callXDOTool >>= callXProps
-
-killAndLaunchCompton :: String -> IO ()
-killAndLaunchCompton configPath =
-  getComptonPID >>= kill >> launchCompton configPath
-
-getResetOption :: String -> ComptonMap -> IO ()
--- getResetOption configPath entries = case find (\(name, _) -> name == CS.c_paintOnOverlay) entries of
-getResetOption configPath entries = case entries !? CS.c_paintOnOverlay of
-  -- TODO Check if paint-on-overlay defaults to false...
-  Nothing                  -> resetCompton
-  Just (Enabled True) -> oldReset
-  Just (Enabled False) -> resetCompton
-  Just _              -> error "Configuration problem - paint on overlay is not of boolean type"
-  where oldReset = killAndLaunchCompton configPath
 
 -- TODO Maybe make everything use the text module?
 readComptonFile :: String -> IO ComptonMap

@@ -1,6 +1,15 @@
-module Frontend.Terminal where
+module Frontend.Terminal
+  ( userInterface
+  ) where
 
 import           Data.List
+import           Frontend.Types
+
+userInterface :: Frontend b
+userInterface = Frontend launchSelect launchInput
+
+launchInput :: String -> IO String
+launchInput helpText = putStrLn helpText >> getLine
 
 mapInd :: Int -> (a -> Int -> b) -> [a] -> [b]
 mapInd startNumber f l = zipWith f l [startNumber..]

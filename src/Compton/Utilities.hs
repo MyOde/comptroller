@@ -4,6 +4,27 @@ import           Compton.Static as CS
 import           Compton.Types
 import           Data.Map.Strict (fromList, insert, insertWith, toList, (!?))
 import           Prelude        hiding (flip)
+import           Processes       (getPIDByName, kill, launchCompton,
+                                  sendSIGUSR1)
+
+getComptonPID :: IO String
+getComptonPID = getPIDByName "compton"
+
+resetCompton :: IO ()
+resetCompton = getComptonPID >>= sendSIGUSR1
+
+killAndLaunchCompton :: String -> IO ()
+killAndLaunchCompton configPath =
+  getComptonPID >>= kill >> launchCompton configPath
+
+getResetOption :: String -> ComptonMap -> IO ()
+getResetOption configPath entries = case entries !? CS.c_paintOnOverlay of
+  -- TODO Check if paint-on-overlay defaults to false...
+  Nothing                  -> resetCompton
+  Just (Enabled True) -> oldReset
+  Just (Enabled False) -> resetCompton
+  Just _              -> error "Configuration problem - paint on overlay is not of boolean type"
+  where oldReset = killAndLaunchCompton configPath
 
 getOpacityArray :: ComptonMap -> Value
 getOpacityArray entries = case entries !? CS.c_opacityRule of
@@ -31,6 +52,9 @@ fromOpacityValue opa = (value opa, opa)
 
 toOpacityValue :: (String, OpacityValue) -> OpacityValue
 toOpacityValue (_, opa) = opa
+
+replaceNumber :: String -> Double -> ComptonMap -> ComptonMap
+replaceNumber entryName value = insert entryName $ Floating value
 
 -- TODO for now always providing true as the value to insert.
 -- This might not be the default value for some boolean entries.
