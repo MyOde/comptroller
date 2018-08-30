@@ -2,9 +2,16 @@ module Compton.Types where
 
 import           Data.List (find)
 import           Data.Map.Strict (Map)
+import           Numeric         (showFFloat)
 
--- TODO Remember to remove all the show derivations - they're not
--- needed beyond debugging purposes
+-- TODO Maybe should have introduced My own typeclass like - representable???
+instance Show Value where
+  show (Floating number)    = showFFloat Nothing number $ ""
+  show (Textual string)     = show string
+  show (Enabled bool)       = show bool
+  show (WinTypes types)     = show types
+  show (OpacityRules rules) = show rules
+  show (RegularRules rules) = show rules
 
 type Entry = (String, Value)
 type ComptonMap = Map String Value
@@ -32,11 +39,12 @@ data WinTypeArg = Fade Value | Shadow Value | Opacity Value | Focus Value derivi
 data Value
   = Enabled Bool
   | Textual String
+  -- TODO maybe delete this numeric???
   | Numeric Integer
   | Floating Double
   | WinTypes [WinType]
   | OpacityRules { opacityValues :: [OpacityValue] }
-  | RegularRules [RegularValue] deriving (Show)
+  | RegularRules [RegularValue]
 
 selectorString :: Selector -> String
 selectorString Class      = "class_g"
