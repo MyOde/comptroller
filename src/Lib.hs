@@ -5,18 +5,13 @@ module Lib
 -- TODO Split out?
 import           Compton.Parser       (parseComptonFile)
 import qualified Compton.Static       as CS
-import           Compton.Types        (Comparer (..), ComptonMap, Entry,
-                                       OpacityValue (..), Selector (..),
-                                       Value (..))
+import           Compton.Types        (Comparer (..), ComptonMap)
 import           Compton.Utilities    (changeOpaciteeeh, flipEnabledBool,
-                                       getComptonPID, getOpacityArray,
-                                       getResetOption, setEnabledBool,
-                                       unsetEnabledBool)
+                                       getComptonPID, getResetOption,
+                                       setEnabledBool, unsetEnabledBool)
 import           Compton.Writer       (writeComptonConfig)
 import           Control.Monad.Reader (ask, liftIO, runReaderT)
-import           Data.List         (find)
 -- TODO Used only for strict readFile
-import           Data.Map.Strict      ((!?))
 import           Data.Text         (unpack)
 import           Data.Text.IO      (readFile)
 import           Prelude           hiding (flip, readFile)
@@ -27,8 +22,7 @@ import           TypeMap              (ConsReadT, askConfigPath,
                                        windowIdentifierSelector)
 import           WizardFlow           (wizardFlow)
 import           Xprops.Parser        (parseXpropOutput)
-import           Xprops.Utilities     (getClassLine, getNameLine,
-                                       windowIdentifierGetter)
+import           Xprops.Utilities     (windowIdentifierGetter)
 
 data Perform
   = ConfigUpdate (ComptonMap -> ComptonMap)
@@ -36,15 +30,6 @@ data Perform
   | Kill
   -- TODO You're asking to be hurt
   | Restart (IO ())
-
--- TODO Find something existing or generalize this
-replaceOrAdd :: Entry -> [Entry] -> [Entry]
-replaceOrAdd (name, value) [] = [(name, value)]
-replaceOrAdd (name, value) ((curName, curValue):rest) =
-  if curName == name
-  then (name, value):rest
-  else (curName, curValue) : replaceOrAdd (name, value) rest
-
 
 parseProps :: IO String
 parseProps = callXDOTool >>= callXProps
