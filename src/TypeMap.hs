@@ -1,11 +1,11 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module TypeMap where
 
-import           Compton.Types  (Comparer (..), Selector (..))
+import           Compton.Types        (Comparer (..), Selector (..))
 import           Control.Monad.Reader (MonadIO, MonadReader, ReaderT, ask)
 import           Terminal.Parser      (ConsoleArguments, configurationPath)
-import           Terminal.Types (EqualityMatcher (..), IdentifyBy (..),
-                                 SensitivityMatcher (..))
+import           Terminal.Types       (EqualityMatcher (..), IdentifyBy (..),
+                                       SensitivityMatcher (..))
 
 newtype ConsReadT a = ConsReadT
   { runConsArgRead :: ReaderT ConsoleArguments IO a

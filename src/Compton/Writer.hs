@@ -3,10 +3,10 @@ module Compton.Writer where
 
 import           Compton.Types
 import           Data.Map.Strict (toList)
-import           Data.Text     (pack)
-import           Data.Text.IO  (writeFile)
-import           Numeric       (showFFloat)
-import           Prelude       hiding (writeFile)
+import           Data.Text       (pack)
+import           Data.Text.IO    (writeFile)
+import           Numeric         (showFFloat)
+import           Prelude         hiding (writeFile)
 
 spaceEqual = " = "
 spaceColon = " :\n{\n"

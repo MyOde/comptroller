@@ -2,8 +2,7 @@ module Lib
     ( defaultMain
     ) where
 
--- TODO Split out?
-import           Compton.Parser       (parseComptonFile)
+import           Compton.Parser       (readComptonFile)
 import qualified Compton.Static       as CS
 import           Compton.Types        (Comparer (..), ComptonMap)
 import           Compton.Utilities    (changeOpaciteeeh, flipEnabledBool,
@@ -11,10 +10,6 @@ import           Compton.Utilities    (changeOpaciteeeh, flipEnabledBool,
                                        setEnabledBool, unsetEnabledBool)
 import           Compton.Writer       (writeComptonConfig)
 import           Control.Monad.Reader (ask, liftIO, runReaderT)
--- TODO Used only for strict readFile
-import           Data.Text         (unpack)
-import           Data.Text.IO      (readFile)
-import           Prelude           hiding (flip, readFile)
 import           Processes            (callXDOTool, callXProps, kill)
 import           Terminal.Parser      as TP
 import           TypeMap              (ConsReadT, askConfigPath,
@@ -33,12 +28,6 @@ data Perform
 
 parseProps :: IO String
 parseProps = callXDOTool >>= callXProps
-
--- TODO Maybe make everything use the text module?
-readComptonFile :: String -> IO ComptonMap
-readComptonFile configPath = parseComptonFile
-  . unpack
-          <$> readFile configPath
 
 comptonUpdate :: (ComptonMap -> ComptonMap) -> ConsReadT ()
 comptonUpdate updateFunc = do
@@ -95,8 +84,8 @@ chooseProgramFlow = do
     WizardMode arguments  -> do
       configPath <- askConfigPath
       config <- liftIO $ readComptonFile configPath
-      newConfig <- wizardFlow arguments config
-      return $ ConfigUpdate $ (\_ -> newConfig)
+      wizardFlow arguments config
+      restartModeFlow
   takeAction actionToTake
 
 takeAction :: Perform -> ConsReadT ()

@@ -5,6 +5,7 @@ module Processes
   , kill
   , sendSIGUSR1
   , launchCompton
+  , deleteFile
   ) where
 
 import           Data.Text      (pack, strip, unpack)
@@ -13,6 +14,7 @@ import           System.Process (callProcess, readProcess)
 xprop = "xprop"
 xdotool = "xdotool"
 killCommand = "kill"
+deleteCommand = "rm"
 xdotool_Arguments = ["getwindowfocus"]
 
 xpropIdArguments :: String -> [String]
@@ -27,6 +29,9 @@ callXDOTool = readProcess' xdotool xdotool_Arguments
 
 callXProps :: String -> IO String
 callXProps id = readProcess' xprop $ xpropIdArguments id
+
+deleteFile :: String -> IO ()
+deleteFile configPath = callProcess deleteCommand [configPath]
 
 getPIDByName :: String -> IO String
 getPIDByName name = unpack . strip . pack

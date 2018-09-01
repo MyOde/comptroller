@@ -1,9 +1,9 @@
 module Compton.Utilities where
 
-import           Compton.Static as CS
+import           Compton.Static  as CS
 import           Compton.Types
 import           Data.Map.Strict (fromList, insert, insertWith, toList, (!?))
-import           Prelude        hiding (flip)
+import           Prelude         hiding (flip)
 import           Processes       (getPIDByName, kill, launchCompton,
                                   sendSIGUSR1)
 

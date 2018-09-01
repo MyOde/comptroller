@@ -1,6 +1,6 @@
 module Wizard where
 
-import qualified Compton.Static as CS
+import qualified Compton.Static  as CS
 import           Compton.Types   (ComptonMap, Entry, Value (..))
 import           Data.Map.Strict (filterWithKey, toList, (!?))
 import           Data.Maybe      (fromJust)
