@@ -117,6 +117,7 @@ textualEntries =
 enumValues :: Map String [String]
 enumValues = fromList
   -- TODO blurkern can also have a dynamic user input value
+  -- Currently missing from the wizard flow
   [ ( c_blurKern
     , [ "3x3box"
       , "5x5box"

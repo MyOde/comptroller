@@ -1,27 +1,23 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module WizardFlow where
 
 import           Compton.Static           as CS
-import           Control.Monad.State.Lazy (MonadIO, MonadState, StateT,
-                                           execStateT, get, lift, liftIO, put)
-import qualified Frontend.DMenu           as Dmenu
-import qualified Frontend.Terminal        as Term
-import           Terminal.Types
-import           TypeMap
--- TODO Consider merghing the Wizard file and this one?
--- Or leave this one as is - since its mostly dealing with IO
 import           Compton.Types            (ComptonMap, Entry)
 import           Compton.Utilities        (changeTextValue, flipEnabledBool,
                                            killAndLaunchCompton, replaceNumber)
 import           Compton.Writer           (writeComptonConfig)
+import           Control.Monad.State.Lazy (MonadIO, MonadState, StateT,
+                                           execStateT, get, lift, liftIO, put)
+import qualified Frontend.DMenu           as Dmenu
+import qualified Frontend.Terminal        as Term
 import           Frontend.Types           (Frontend, choice, input)
 import           Numeric                  (showFFloat)
 import           Processes                (deleteFile)
+import           Terminal.Types
+import           TypeMap
+-- TODO Consider merghing the Wizard file and this one?
+-- Or leave this one as is - since its mostly dealing with IO
 import           Wizard                   (WizardStep (..), wizardStep)
 
--- newtype WizardStateT a = WizardStateT
---   { runWizardState :: StateT [Entry] ConsReadT a
---   } (Applicative, Monad, Functor, MonadState [Entry], MonadIO)
 type WizardStateT a = StateT ComptonMap ConsReadT a
 
 makeTempPath :: String -> String
@@ -52,7 +48,6 @@ wizardFlow flowArg initialEntries = do
                 DMenuFrontend    -> Dmenu.userInterface)
             Initial
 
--- runWizardSteps :: ([(String, WizardStep)] -> IO WizardStep) -> WizardStep -> WizardStateT ()
 runWizardSteps :: Frontend WizardStep -> WizardStep -> WizardStateT ()
 runWizardSteps frontend wizState = do
   entries <- get

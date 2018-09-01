@@ -1,12 +1,16 @@
 {-# LANGUAGE RecordWildCards #-}
 module Compton.Parser
-  ( parseComptonFile
+  ( readComptonFile
   ) where
+
 
 import           Compton.Static
 import           Compton.Types
 import           Data.List                     (foldr1)
 import           Data.Map.Strict               (fromList)
+import           Data.Text                     (unpack)
+import           Data.Text.IO                  (readFile)
+import           Prelude                       hiding (readFile)
 import           Text.Parsec                   (ParseError, endBy, sepEndBy,
                                                 skipMany, try)
 import           Text.Parsec.Char              (char, digit, noneOf, oneOf,
@@ -14,6 +18,11 @@ import           Text.Parsec.Char              (char, digit, noneOf, oneOf,
 import           Text.Parsec.Combinator        (option)
 import           Text.ParserCombinators.Parsec (Parser, many1, parse, (<|>))
 
+
+readComptonFile :: String -> IO ComptonMap
+readComptonFile configPath = parseComptonFile
+  . unpack
+  <$> readFile configPath
 
 staticNameParser :: [String] -> Parser Value -> Parser Entry
 staticNameParser entryNames valueParser =
