@@ -1,6 +1,6 @@
 module Compton.Types where
 
-import           Data.List (find)
+import           Data.List       (find)
 import           Data.Map.Strict (Map)
 import           Numeric         (showFFloat)
 

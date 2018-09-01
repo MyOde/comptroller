@@ -72,4 +72,4 @@ runWizardSteps frontend wizState = do
       (putW $ changeTextValue entryName value entries)
         >> runWizardSteps frontend ChooseEnumEntry
     Back next           -> runWizardSteps frontend next
-    other       -> runWizardSteps frontend other
+    other               -> runWizardSteps frontend other
