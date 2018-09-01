@@ -12,15 +12,16 @@ import           Frontend.Types
 userInterface :: Frontend b
 userInterface = Frontend launchSelect launchInput
 
+-- TODO Ignoring informative text for now:
+-- Since its interfering with regular input.
 launchInput :: String -> IO String
 launchInput _ =
   select options []
   >>= takeRight
   -- >>= validate helpText
 
--- validate :: String -> String -> IO String
--- -- validate expected actual = if expected == actual then launchInput expected else return actual
--- validate expected actual = error $ "expected " ++ expected ++ "\nactual " ++ actual
+validate :: String -> String -> IO String
+validate expected actual = if expected == actual then launchInput expected else return actual
 
 takeRight :: Either ProcessError String -> IO String
 takeRight (Right result)     = return result

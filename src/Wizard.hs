@@ -4,6 +4,7 @@ import qualified Compton.Static as CS
 import           Compton.Types   (ComptonMap, Entry, Value (..))
 import           Data.Map.Strict (filterWithKey, toList, (!?))
 import           Numeric         (showFFloat)
+import           Stringers       (ppPrepend)
 
 data WizardStep
   = Initial
@@ -67,17 +68,12 @@ wizardStep ChooseFlagEntry entries = dynEntries ++ persistentChoices Initial
 wizardStep ChooseNumberEntry entries = pretty ++ persistentChoices Initial
   where numbersWithValues = fmap (mixWithNumberValue entries) CS.floatingEntries
         maxLength = maximum . map (stringLength . third) $ numbersWithValues
-        pretty = map (\(name, step, val) -> (ppWithValue val name maxLength, step)) numbersWithValues
+        pretty = map (\(name, step, val) -> (ppPrepend maxLength val name, step)) numbersWithValues
+
+-- wizardStep ChooseEnumEntry entries = pretty ++ persistentChoices Initial
 
 third :: (a,b,c) -> c
 third (_,_,val) = val
-
--- TODO Maybe generalize retreival of length in an outside wrapper iterator function
-ppWithValue :: Show a => a -> String -> Int -> String
-ppWithValue val name longestVal = stringVal ++ spaces ++ name
-  where stringVal = show val
-        numberOfSpaces = length stringVal - longestVal
-        spaces = map (\_->' ') [0..numberOfSpaces]
 
 stringLength :: Show a => a -> Int
 stringLength = length . show
