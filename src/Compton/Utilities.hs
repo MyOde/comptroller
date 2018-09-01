@@ -56,6 +56,9 @@ toOpacityValue (_, opa) = opa
 replaceNumber :: String -> Double -> ComptonMap -> ComptonMap
 replaceNumber entryName value = insert entryName $ Floating value
 
+changeTextValue :: String -> String -> ComptonMap -> ComptonMap
+changeTextValue entryName value = insert entryName $ Textual value
+
 -- TODO for now always providing true as the value to insert.
 -- This might not be the default value for some boolean entries.
 flipEnabledBool :: String -> ComptonMap -> ComptonMap

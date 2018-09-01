@@ -1,6 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module WizardFlow where
 
+import           Compton.Static           as CS
 import           Control.Monad.State.Lazy (MonadIO, MonadState, StateT,
                                            execStateT, get, lift, liftIO, put)
 import qualified Frontend.DMenu           as Dmenu
@@ -10,13 +11,12 @@ import           TypeMap
 -- TODO Consider merghing the Wizard file and this one?
 -- Or leave this one as is - since its mostly dealing with IO
 import           Compton.Types            (ComptonMap, Entry)
-import           Compton.Utilities        (flipEnabledBool,
+import           Compton.Utilities        (changeTextValue, flipEnabledBool,
                                            killAndLaunchCompton, replaceNumber)
 import           Compton.Writer           (writeComptonConfig)
 import           Frontend.Types           (Frontend, choice, input)
 import           Numeric                  (showFFloat)
 import           Wizard                   (WizardStep (..), wizardStep)
-
 
 -- newtype WizardStateT a = WizardStateT
 --   { runWizardState :: StateT [Entry] ConsReadT a
@@ -62,5 +62,8 @@ runWizardSteps frontend wizState = do
       (putW $ replaceNumber entryName newValue entries)
         >> runWizardSteps frontend ChooseNumberEntry
       where read' = read :: String -> Double
+    EnumValueChange entryName value -> do
+      (putW $ changeTextValue entryName value entries)
+        >> runWizardSteps frontend ChooseEnumEntry
     Back next           -> runWizardSteps frontend next
     other       -> runWizardSteps frontend other

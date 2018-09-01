@@ -1,5 +1,7 @@
 module Compton.Static where
 
+import           Data.Map.Strict (Map, fromList)
+
 -- 43 options
 c_shadow = "shadow"
 c_noDndShadow = "no-dnd-shadow"
@@ -110,4 +112,46 @@ textualEntries =
   , c_backend
   , c_vsync
   , c_glxSwapMethod
+  ]
+
+enumValues :: Map String [String]
+enumValues = fromList
+  -- TODO blurkern can also have a dynamic user input value
+  [ ( c_blurKern
+    , [ "3x3box"
+      , "5x5box"
+      , "7x7box"
+      , "3x3gaussian"
+      , "5x5gaussian"
+      , "7x7gaussian"
+      , "9x9gaussian"
+      , "11x11gaussian"
+      ]
+    )
+  , ( c_backend
+    , [ "xrender"
+      , "glx"
+      , "xr_glx_hybrid"
+      ]
+    )
+  , ( c_vsync
+    , [ "none"
+      , "drm"
+      , "opengl"
+      , "opengl-oml"
+      , "opengl-swc"
+      , "opengl-mswc"
+      ]
+    )
+  , ( c_glxSwapMethod
+    , [ "undefined"
+      , "exchange"
+      , "copy"
+      , "3"
+      , "4"
+      , "5"
+      , "6"
+      , "buffer-age"
+      ]
+    )
   ]

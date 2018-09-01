@@ -3,6 +3,7 @@ module Wizard where
 import qualified Compton.Static as CS
 import           Compton.Types   (ComptonMap, Entry, Value (..))
 import           Data.Map.Strict (filterWithKey, toList, (!?))
+import           Data.Maybe      (fromJust)
 import           Numeric         (showFFloat)
 import           Stringers       (ppPrepend)
 
@@ -13,6 +14,8 @@ data WizardStep
   | ChooseEnumEntry
   | ChangeFlag String
   | InputNumber String
+  | ChooseEnumValue String
+  | EnumValueChange String String
   | Back WizardStep
   | SaveAndExit
   | Exit
@@ -32,6 +35,9 @@ changeNumeric = ("Change numeric", ChooseNumberEntry)
 changeFlag :: (String, WizardStep)
 changeFlag = ("Toggle flag", ChooseFlagEntry)
 
+changeEnum :: (String, WizardStep)
+changeEnum = ("Change enumerated", ChooseEnumEntry)
+
 persistentChoices :: WizardStep -> [(String, WizardStep)]
 persistentChoices next = [back next, saveAndExit, exit]
 
@@ -40,6 +46,7 @@ wizardStep :: WizardStep -> ComptonMap -> [(String, WizardStep)]
 wizardStep Initial _ =
   [ changeFlag
   , changeNumeric
+  , changeEnum
   , saveAndExit
   , exit
   ]
@@ -70,7 +77,13 @@ wizardStep ChooseNumberEntry entries = pretty ++ persistentChoices Initial
         maxLength = maximum . map (stringLength . third) $ numbersWithValues
         pretty = map (\(name, step, val) -> (ppPrepend maxLength val name, step)) numbersWithValues
 
--- wizardStep ChooseEnumEntry entries = pretty ++ persistentChoices Initial
+wizardStep ChooseEnumEntry entries = pretty ++ persistentChoices Initial
+  where withEnumValues = fmap (mixWithStringValue entries) CS.textualEntries
+        maxLength = maximum . map (stringLength . third) $ withEnumValues
+        pretty = map (\(name, step, val) -> (ppPrepend maxLength val name, step)) withEnumValues
+
+wizardStep (ChooseEnumValue entryName) _ = options ++ persistentChoices ChooseEnumEntry
+      where options = map (\val -> (val, EnumValueChange entryName val)) $ fromJust $ CS.enumValues !? entryName
 
 third :: (a,b,c) -> c
 third (_,_,val) = val
@@ -78,11 +91,20 @@ third (_,_,val) = val
 stringLength :: Show a => a -> Int
 stringLength = length . show
 
+-- TODO A mess
+mixWithStringValue :: ComptonMap -> String -> (String, WizardStep, Value)
+mixWithStringValue = mixWith (\entryName -> ChooseEnumValue entryName) $ Textual ""
+
+-- TODO A mess
 mixWithNumberValue :: ComptonMap -> String -> (String, WizardStep, Value)
-mixWithNumberValue entries name = case entries !? name of
-  Just result -> (name, InputNumber name, result)
+mixWithNumberValue = mixWith (\entryName -> InputNumber entryName) $ Floating 0
+
+-- TODO A mess
+mixWith :: (String -> WizardStep) -> Value -> ComptonMap -> String -> (String, WizardStep, Value)
+mixWith step nuthin entries name = case entries !? name of
+  Just result -> (name, step name, result)
   -- TODO Fake magic 0. Should find default values for all of these
-  Nothing     -> (name, InputNumber name, Floating 0)
+  Nothing     -> (name, step name, nuthin)
 
 
 dirtyBoolExtract :: Value -> String
