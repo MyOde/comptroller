@@ -16,6 +16,7 @@ import           Compton.Utilities        (changeTextValue, flipEnabledBool,
 import           Compton.Writer           (writeComptonConfig)
 import           Frontend.Types           (Frontend, choice, input)
 import           Numeric                  (showFFloat)
+import           Processes                (deleteFile)
 import           Wizard                   (WizardStep (..), wizardStep)
 
 -- newtype WizardStateT a = WizardStateT
@@ -31,13 +32,19 @@ putW state = do
   configPath <- makeTempPath <$> lift askConfigPath
   liftIO $ writeComptonConfig configPath state
   liftIO $ killAndLaunchCompton configPath
+  liftIO $ deleteFile configPath
   put state
 
-wizardFlow :: WizardArg -> ComptonMap -> ConsReadT ComptonMap
+launchRegularConfig :: WizardStateT ()
+launchRegularConfig = do
+  configPath <- lift askConfigPath
+  liftIO $ killAndLaunchCompton configPath
+
+wizardFlow :: WizardArg -> ComptonMap -> ConsReadT ()
 wizardFlow flowArg initialEntries = do
   configPath <- askConfigPath
-  newConfig <- execStateT wizardStepper initialEntries
-  return $ newConfig
+  execStateT wizardStepper initialEntries
+  return ()
   where wizardStepper
           = runWizardSteps
             (case frontend flowArg of
@@ -51,8 +58,12 @@ runWizardSteps frontend wizState = do
   entries <- get
   wizardChoice <- liftIO $ choice frontend $ wizardStep wizState entries
   case wizardChoice of
-    Exit                -> return ()
-    SaveAndExit         -> return ()
+    Exit                -> do
+      launchRegularConfig
+    SaveAndExit         -> do
+      configPath <- lift askConfigPath
+      liftIO $ writeComptonConfig configPath entries
+      launchRegularConfig
     ChangeFlag flagName -> do
       (putW $ flipEnabledBool flagName entries)
         >> runWizardSteps frontend ChooseFlagEntry

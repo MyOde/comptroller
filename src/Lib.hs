@@ -95,8 +95,8 @@ chooseProgramFlow = do
     WizardMode arguments  -> do
       configPath <- askConfigPath
       config <- liftIO $ readComptonFile configPath
-      newConfig <- wizardFlow arguments config
-      return $ ConfigUpdate $ (\_ -> newConfig)
+      wizardFlow arguments config
+      restartModeFlow
   takeAction actionToTake
 
 takeAction :: Perform -> ConsReadT ()
